@@ -19,9 +19,11 @@ enum PaintTool {
 @onready var fill_button: Button = %Fill
 @onready var pick_button: Button = %Pick
 @onready var erase_button: Button = %Erase
+@onready var erase_all_button: Button = %EraseAll
 
 @onready var layer_up: Button = %LayerUp
 @onready var layer_down: Button = %LayerDown
+@onready var layer_select: OptionButton = %LayerSelect
 @onready var layer_highlight: Button = %LayerHighlight
 @onready var layer_grid: Button = %LayerGrid
 
@@ -44,6 +46,7 @@ var tilemap: TileMapLayer = null:
 			tileset = v.tile_set
 		else:
 			tileset = null
+		_update_layer_dropdown.call_deferred()
 
 var tileset: TileSet = null:
 	set(v):
@@ -81,6 +84,8 @@ func _ready() -> void:
 	pick_button.icon = get_theme_icon("ColorPick", "EditorIcons")
 	erase_button.icon = get_theme_icon("Eraser", "EditorIcons")
 
+	erase_all_button.icon = get_theme_icon("Clear", "EditorIcons")
+
 	layer_up.icon = get_theme_icon("MoveUp", "EditorIcons")
 	layer_down.icon = get_theme_icon("MoveDown", "EditorIcons")
 	layer_highlight.icon = get_theme_icon("TileMapHighlightSelected", "EditorIcons")
@@ -99,9 +104,11 @@ func _ready() -> void:
 	fill_button.pressed.connect(_on_tool_changed.bind(PaintTool.BUCKET))
 	pick_button.pressed.connect(_on_tool_changed.bind(PaintTool.PICK))
 	erase_button.pressed.connect(_on_tool_changed.bind(PaintTool.ERASE))
+	erase_all_button.pressed.connect(_on_erase_all)
 
 	layer_up.pressed.connect(_on_layer_up)
 	layer_down.pressed.connect(_on_layer_down)
+	layer_select.item_selected.connect(_on_layer_selected)
 	layer_highlight.toggled.connect(_on_layer_highlight_toggled)
 	layer_grid.toggled.connect(_on_layer_grid_toggled)
 
@@ -193,7 +200,8 @@ func _refresh_terrains() -> void:
 		selected_index = -1
 
 	_update_management_buttons()
-	_update_selection_buttons()
+	call_deferred("_update_selection_buttons")
+	call_deferred("_update_layer_dropdown")
 
 
 func _show_empty(show: bool) -> void:
@@ -763,7 +771,13 @@ func _tileset_line(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
 # ---- TERRAIN MANAGEMENT ----
 
 func _on_add_terrain() -> void:
-	if not tileset:
+	if not tileset or not undo_manager:
+		return
+	_do_add_terrain.call_deferred()
+
+
+func _do_add_terrain() -> void:
+	if not tileset or not undo_manager:
 		return
 
 	var terrain_set := 0
@@ -791,7 +805,13 @@ func _on_add_terrain() -> void:
 
 
 func _on_edit_terrain() -> void:
-	if not tileset or selected_index < 0:
+	if not tileset or not undo_manager or selected_index < 0:
+		return
+	_do_edit_terrain.call_deferred()
+
+
+func _do_edit_terrain() -> void:
+	if not tileset or not undo_manager or selected_index < 0:
 		return
 
 	var t: Dictionary = flattened_terrains[selected_index]
@@ -829,7 +849,13 @@ func _on_edit_terrain() -> void:
 
 
 func _on_remove_terrain() -> void:
-	if not tileset or selected_index < 0:
+	if not tileset or not undo_manager or selected_index < 0:
+		return
+	_do_remove_terrain.call_deferred()
+
+
+func _do_remove_terrain() -> void:
+	if not tileset or not undo_manager or selected_index < 0:
 		return
 
 	var t: Dictionary = flattened_terrains[selected_index]
@@ -853,7 +879,7 @@ func _on_remove_terrain() -> void:
 
 
 func _on_move_terrain(down: bool) -> void:
-	if not tileset or selected_index < 0:
+	if not tileset or not undo_manager or selected_index < 0:
 		return
 
 	var index_to := selected_index + (1 if down else -1)
@@ -890,10 +916,85 @@ func _find_builtin_button_by_icon(our_icon: Texture2D, fallback_name: String) ->
 	return null
 
 
+func _on_erase_all() -> void:
+	if not tilemap or not undo_manager:
+		return
+	_do_erase_all.call_deferred()
+
+
+func _do_erase_all() -> void:
+	if not tilemap or not undo_manager:
+		return
+
+	var dialog := ConfirmationDialog.new()
+	dialog.dialog_text = "Erase ALL tiles on layer '%s'?" % tilemap.name
+	dialog.get_ok_button().text = "Erase All"
+	EditorInterface.popup_dialog_centered(dialog)
+	var confirmed := await _await_dialog(dialog)
+	dialog.queue_free()
+
+	if confirmed:
+		var cells := tilemap.get_used_cells()
+		var saved := _save_cells(cells)
+		undo_manager.create_action("Erase All on " + tilemap.name, UndoRedo.MERGE_DISABLE, tilemap)
+		for c in cells:
+			undo_manager.add_do_method(tilemap, "erase_cell", c)
+		undo_manager.add_undo_method(self, "_restore_cells", saved, tilemap)
+		undo_manager.commit_action()
+
+
 func _on_layer_up() -> void:
 	var btn := _find_builtin_button_by_icon(layer_up.icon, "MoveUp")
 	if btn:
 		btn.pressed.emit()
+
+
+func _update_layer_dropdown() -> void:
+	layer_select.clear()
+	if not tilemap:
+		layer_select.disabled = true
+		layer_up.visible = false
+		layer_down.visible = false
+		return
+
+	var parent := tilemap.get_parent()
+	if not parent:
+		return
+
+	var siblings: Array[Node] = []
+	for child in parent.get_children():
+		if child is TileMapLayer:
+			siblings.append(child)
+
+	if siblings.size() <= 1:
+		layer_select.disabled = true
+		layer_up.visible = false
+		layer_down.visible = false
+		layer_select.add_item(tilemap.name)
+		layer_select.select(0)
+		return
+
+	for i in siblings.size():
+		var lyr: TileMapLayer = siblings[i]
+		layer_select.add_item(lyr.name)
+		if lyr == tilemap:
+			layer_select.select(i)
+
+	layer_select.disabled = false
+	layer_up.visible = siblings.size() >= 3
+	layer_down.visible = siblings.size() >= 3
+
+
+func _on_layer_selected(idx: int) -> void:
+	var parent := tilemap.get_parent() if tilemap else null
+	if not parent:
+		return
+	var siblings: Array[Node] = []
+	for child in parent.get_children():
+		if child is TileMapLayer:
+			siblings.append(child)
+	if idx >= 0 and idx < siblings.size():
+		EditorInterface.edit_node(siblings[idx])
 
 
 func _on_layer_down() -> void:

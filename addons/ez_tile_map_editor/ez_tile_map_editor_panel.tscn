@@ -3,10 +3,9 @@
 [ext_resource type="Script" path="res://addons/ez_tile_map_editor/ez_tile_map_editor_panel.gd" id="1_panel"]
 
 [sub_resource type="ButtonGroup" id="draw_group"]
-allow_unpress = true
 
 [node name="EZTileMapEditorPanel" type="Control"]
-custom_minimum_size = Vector2(0, 100)
+custom_minimum_size = Vector2(0, 120)
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -62,14 +61,12 @@ toggle_mode = true
 button_group = SubResource("draw_group")
 flat = true
 
-[node name="VSeparator" type="VSeparator" parent="VBoxContainer/Toolbar"]
-layout_mode = 2
-
 [node name="Pick" type="Button" parent="VBoxContainer/Toolbar"]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Pick terrain (Ctrl+Click)"
 toggle_mode = true
+button_group = SubResource("draw_group")
 flat = true
 
 [node name="Erase" type="Button" parent="VBoxContainer/Toolbar"]
@@ -77,11 +74,55 @@ unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Erase terrain"
 toggle_mode = true
+button_group = SubResource("draw_group")
+flat = true
+
+[node name="VSeparator" type="VSeparator" parent="VBoxContainer/Toolbar"]
+layout_mode = 2
+
+[node name="EraseAll" type="Button" parent="VBoxContainer/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Erase all tiles on selected layer"
 flat = true
 
 [node name="Spacer" type="Control" parent="VBoxContainer/Toolbar"]
 layout_mode = 2
 size_flags_horizontal = 3
+
+[node name="LayerSelect" type="OptionButton" parent="VBoxContainer/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+
+[node name="LayerUp" type="Button" parent="VBoxContainer/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Select previous layer"
+flat = true
+
+[node name="LayerDown" type="Button" parent="VBoxContainer/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Select next layer"
+flat = true
+
+[node name="LayerHighlight" type="Button" parent="VBoxContainer/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Highlight selected layer"
+toggle_mode = true
+flat = true
+
+[node name="LayerGrid" type="Button" parent="VBoxContainer/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Toggle grid visibility"
+toggle_mode = true
+flat = true
+
+[node name="VSeparator2" type="VSeparator" parent="VBoxContainer/Toolbar"]
+layout_mode = 2
 
 [node name="AddTerrain" type="Button" parent="VBoxContainer/Toolbar"]
 unique_name_in_owner = true
@@ -117,35 +158,6 @@ flat = true
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Toggle terrain options"
-toggle_mode = true
-flat = true
-
-[node name="VSeparator2" type="VSeparator" parent="VBoxContainer/Toolbar"]
-layout_mode = 2
-
-[node name="LayerUp" type="Button" parent="VBoxContainer/Toolbar"]
-unique_name_in_owner = true
-layout_mode = 2
-tooltip_text = "Select previous layer"
-flat = true
-
-[node name="LayerDown" type="Button" parent="VBoxContainer/Toolbar"]
-unique_name_in_owner = true
-layout_mode = 2
-tooltip_text = "Select next layer"
-flat = true
-
-[node name="LayerHighlight" type="Button" parent="VBoxContainer/Toolbar"]
-unique_name_in_owner = true
-layout_mode = 2
-tooltip_text = "Highlight selected layer"
-toggle_mode = true
-flat = true
-
-[node name="LayerGrid" type="Button" parent="VBoxContainer/Toolbar"]
-unique_name_in_owner = true
-layout_mode = 2
-tooltip_text = "Toggle grid visibility"
 toggle_mode = true
 flat = true
 
