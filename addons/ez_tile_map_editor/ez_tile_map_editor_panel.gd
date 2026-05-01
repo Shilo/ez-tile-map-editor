@@ -30,7 +30,12 @@ enum PaintTool { NONE, DRAW, LINE, RECT, BUCKET, PICK, ERASE }
 
 var tilemap: TileMapLayer = null:
 	set(v):
+		if tilemap and tilemap.visibility_changed.is_connected(_on_tilemap_visibility_changed):
+			tilemap.visibility_changed.disconnect(_on_tilemap_visibility_changed)
 		tilemap = v
+		if tilemap:
+			if not tilemap.visibility_changed.is_connected(_on_tilemap_visibility_changed):
+				tilemap.visibility_changed.connect(_on_tilemap_visibility_changed)
 		tileset = v.tile_set if v else null
 		_update_layer_dropdown.call_deferred()
 		_update_erase_buttons.call_deferred()
@@ -106,7 +111,44 @@ func _ready() -> void:
 	draw_button.button_pressed = true
 	_tool_buttons = [null, draw_button, line_button, rect_button, fill_button, pick_button, erase_button]
 	_on_options_toggled()
-	_show_empty(true)
+	_update_empty_state()
+
+
+func _is_tilemap_editable() -> bool:
+	return tilemap != null and tilemap.is_visible_in_tree()
+
+
+func _update_empty_state() -> void:
+	if not tilemap:
+		empty_label.text = "No terrain sets defined.\nUse the TileSet bottom panel to add terrains."
+		empty_label.visible = true
+		scroll_container.visible = false
+	elif not tilemap.is_visible_in_tree():
+		empty_label.text = "The TileMapLayer is disabled or invisible"
+		empty_label.visible = true
+		scroll_container.visible = false
+	elif not tileset or flattened_terrains.is_empty():
+		empty_label.text = "No terrain sets defined.\nUse the TileSet bottom panel to add terrains."
+		empty_label.visible = true
+		scroll_container.visible = false
+	else:
+		empty_label.visible = false
+		scroll_container.visible = true
+	_update_tool_buttons()
+
+
+func _update_tool_buttons() -> void:
+	var editable := _is_tilemap_editable()
+	draw_button.disabled = not editable
+	line_button.disabled = not editable
+	rect_button.disabled = not editable
+	fill_button.disabled = not editable
+	pick_button.disabled = not editable
+	_update_erase_buttons()
+
+
+func _on_tilemap_visibility_changed() -> void:
+	_update_empty_state.call_deferred()
 
 
 func _on_tool_changed(tool: PaintTool) -> void:
@@ -136,7 +178,7 @@ func _refresh_terrains() -> void:
 		c.free()
 	flattened_terrains.clear()
 	if not tileset:
-		_show_empty(true)
+		_update_empty_state()
 		return
 	_build_icon_cache()
 	var terrain_count := 0
@@ -149,24 +191,19 @@ func _refresh_terrains() -> void:
 			flattened_terrains.append({set = set_idx, idx = ter_idx, name = name, color = color, icon_texture = icon.get("texture", null)})
 			terrain_count += 1
 	if terrain_count == 0:
-		_show_empty(true)
+		_update_empty_state()
 		return
-	_show_empty(false)
 	for i in flattened_terrains.size():
 		_create_terrain_entry(flattened_terrains[i], i)
 	if selected_index == -1 and flattened_terrains.size() > 0:
 		selected_index = 0
 	if selected_index >= flattened_terrains.size():
 		selected_index = -1
+	_update_empty_state()
 	_update_management_buttons()
 	_update_selection_buttons()
 	_update_erase_buttons.call_deferred()
 	call_deferred("_update_layer_dropdown")
-
-
-func _show_empty(show: bool) -> void:
-	empty_label.visible = show
-	scroll_container.visible = not show
 
 
 func _build_icon_cache() -> void:
@@ -286,9 +323,10 @@ func _update_management_buttons() -> void:
 
 
 func _update_erase_buttons() -> void:
+	var editable := _is_tilemap_editable()
 	var has_tiles := tilemap != null and tilemap.get_used_cells().size() > 0
-	erase_button.disabled = not has_tiles
-	erase_all_button.disabled = not has_tiles
+	erase_button.disabled = not editable or not has_tiles
+	erase_all_button.disabled = not editable or not has_tiles
 
 
 func _update_layer_dropdown() -> void:
@@ -364,8 +402,7 @@ func about_to_be_visible() -> void:
 	var settings := EditorInterface.get_editor_settings()
 	layer_highlight.set_pressed_no_signal(settings.get_setting("editors/tiles_editor/highlight_selected_layer"))
 	layer_grid.set_pressed_no_signal(settings.get_setting("editors/tiles_editor/display_grid"))
-	_update_erase_buttons()
-	_update_selection_buttons()
+	_update_empty_state()
 
 
 func _get_selected_terrain() -> Dictionary:
@@ -396,7 +433,9 @@ func _restore_cells(saved: Dictionary, tm: TileMapLayer) -> void:
 # ---- CANVAS INPUT ----
 
 func canvas_input(event: InputEvent) -> bool:
-	if not tilemap or not tileset:
+	if not _is_tilemap_editable():
+		return false
+	if not tileset:
 		return false
 	if not event is InputEventMouse:
 		return false
@@ -626,7 +665,7 @@ func _pick_at_mouse() -> bool:
 # ---- CANVAS OVERLAY ----
 
 func canvas_draw(overlay: Control) -> void:
-	if not draw_overlay or not tilemap:
+	if not draw_overlay or not _is_tilemap_editable():
 		return
 	if not mouse_down:
 		if paint_tool == PaintTool.PICK or paint_tool == PaintTool.ERASE:
