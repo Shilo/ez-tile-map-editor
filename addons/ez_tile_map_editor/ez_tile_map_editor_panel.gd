@@ -19,14 +19,12 @@ enum PaintTool {
 @onready var fill_button: Button = %Fill
 @onready var pick_button: Button = %Pick
 @onready var erase_button: Button = %Erase
-@onready var replace_button: Button = %Replace
 
 @onready var layer_up: Button = %LayerUp
 @onready var layer_down: Button = %LayerDown
 @onready var layer_highlight: Button = %LayerHighlight
 @onready var layer_grid: Button = %LayerGrid
 
-@onready var grid_mode_button: Button = %GridMode
 @onready var quick_mode_button: Button = %QuickMode
 
 @onready var add_terrain_button: Button = %AddTerrain
@@ -62,7 +60,6 @@ var undo_manager: EditorUndoRedoManager
 var flattened_terrains: Array[Dictionary] = []  # [{set, idx, name, color, icon_texture, icon_region}]
 var selected_index: int = -1             # -1 = erase
 var paint_tool: PaintTool = PaintTool.DRAW
-var replace_mode: bool = false
 
 var draw_overlay: bool = false
 var mouse_down: bool = false
@@ -82,7 +79,6 @@ func _ready() -> void:
 	fill_button.icon = get_theme_icon("Bucket", "EditorIcons")
 	pick_button.icon = get_theme_icon("ColorPick", "EditorIcons")
 	erase_button.icon = get_theme_icon("Eraser", "EditorIcons")
-	replace_button.icon = get_theme_icon("Reload", "EditorIcons")
 
 	layer_up.icon = get_theme_icon("MoveUp", "EditorIcons")
 	layer_down.icon = get_theme_icon("MoveDown", "EditorIcons")
@@ -94,7 +90,6 @@ func _ready() -> void:
 	move_up_button.icon = get_theme_icon("ArrowUp", "EditorIcons")
 	move_down_button.icon = get_theme_icon("ArrowDown", "EditorIcons")
 	remove_terrain_button.icon = get_theme_icon("Remove", "EditorIcons")
-	grid_mode_button.icon = get_theme_icon("FileThumbnail", "EditorIcons")
 	quick_mode_button.icon = get_theme_icon("GuiVisibilityVisible", "EditorIcons")
 
 	draw_button.pressed.connect(_on_tool_changed.bind(PaintTool.DRAW))
@@ -103,14 +98,11 @@ func _ready() -> void:
 	fill_button.pressed.connect(_on_tool_changed.bind(PaintTool.BUCKET))
 	pick_button.toggled.connect(_on_pick_toggled)
 
-	replace_button.toggled.connect(func(v: bool): replace_mode = v)
-
 	layer_up.pressed.connect(_on_layer_up)
 	layer_down.pressed.connect(_on_layer_down)
 	layer_highlight.toggled.connect(_on_layer_highlight_toggled)
 	layer_grid.toggled.connect(_on_layer_grid_toggled)
 
-	grid_mode_button.pressed.connect(_on_grid_mode_toggled)
 	quick_mode_button.pressed.connect(_on_quick_mode_toggled)
 
 	add_terrain_button.pressed.connect(_on_add_terrain)
@@ -183,8 +175,6 @@ func _refresh_terrains() -> void:
 
 	for i in flattened_terrains.size():
 		_create_terrain_entry(flattened_terrains[i], i)
-
-	_create_erase_entry()
 
 	if selected_index >= flattened_terrains.size():
 		selected_index = -1
@@ -260,36 +250,13 @@ func _create_terrain_entry(data: Dictionary, index: int) -> void:
 	terrain_grid.add_child(btn)
 
 
-func _create_erase_entry() -> void:
-	var btn := Button.new()
-	btn.custom_minimum_size = Vector2(80, 80)
-	btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	btn.toggle_mode = true
-	btn.focus_mode = Control.FOCUS_NONE
-	btn.flat = true
-	btn.name = "Erase"
-
-	btn.icon = get_theme_icon("Eraser", "EditorIcons")
-	btn.tooltip_text = "Erase"
-	btn.self_modulate = Color(1.0, 0.3, 0.3, 0.5)
-
-	btn.pressed.connect(_on_terrain_selected.bind(-1))
-	terrain_grid.add_child(btn)
-
-	if selected_index == -1:
-		btn.button_pressed = true
-
-
 func _on_terrain_selected(index: int) -> void:
 	selected_index = index
 	for c in terrain_grid.get_children():
 		var btn := c as Button
 		if not btn:
 			continue
-		if index >= 0:
-			btn.button_pressed = (c.get_index() == index)
-		else:
-			btn.button_pressed = (c.get_index() == flattened_terrains.size())
+		btn.button_pressed = (c.get_index() == index)
 	_update_management_buttons()
 
 
@@ -299,13 +266,6 @@ func _update_management_buttons() -> void:
 	move_up_button.disabled = not editable or selected_index == 0
 	move_down_button.disabled = not editable or selected_index >= flattened_terrains.size() - 1
 	remove_terrain_button.disabled = not editable
-
-
-func _on_grid_mode_toggled() -> void:
-	for c in terrain_grid.get_children():
-		var btn := c as Button
-		if btn:
-			btn.custom_minimum_size = Vector2(52, 52) if grid_mode_button.button_pressed else Vector2(80, 80)
 
 
 func _on_quick_mode_toggled() -> void:
@@ -505,9 +465,7 @@ func _expand_cells(cells: Array[Vector2i]) -> Array:
 func _get_brush_cells() -> Array[Vector2i]:
 	match paint_tool:
 		PaintTool.DRAW:
-			if mouse_prev == mouse_current:
-				return [mouse_current]
-			return _bresenham_line(mouse_prev, mouse_current)
+			return [mouse_current]
 		PaintTool.LINE:
 			return _tileset_line(mouse_start, mouse_current)
 		PaintTool.RECT:
@@ -622,7 +580,7 @@ func canvas_draw(overlay: Control) -> void:
 		return
 
 	var color: Color
-	if selected_index < 0:
+	if drag_erasing or selected_index < 0 or erase_button.button_pressed:
 		color = Color(0.0, 0.0, 0.0, 0.35)
 	else:
 		color = Color(1.0, 1.0, 1.0, 0.35)
@@ -892,12 +850,14 @@ func _on_layer_highlight_toggled(toggled: bool) -> void:
 	var settings := EditorInterface.get_editor_settings()
 	settings.set_setting("editors/tiles_editor/highlight_selected_layer", toggled)
 	settings.emit_changed()
+	update_overlay.emit()
 
 
 func _on_layer_grid_toggled(toggled: bool) -> void:
 	var settings := EditorInterface.get_editor_settings()
 	settings.set_setting("editors/tiles_editor/display_grid", toggled)
 	settings.emit_changed()
+	update_overlay.emit()
 
 
 func about_to_be_visible() -> void:
