@@ -101,6 +101,7 @@ func _ready() -> void:
 	line_button.pressed.connect(_on_tool_changed.bind(PaintTool.LINE))
 	rect_button.pressed.connect(_on_tool_changed.bind(PaintTool.RECT))
 	fill_button.pressed.connect(_on_tool_changed.bind(PaintTool.BUCKET))
+	pick_button.toggled.connect(_on_pick_toggled)
 
 	replace_button.toggled.connect(func(v: bool): replace_mode = v)
 
@@ -128,6 +129,12 @@ func _process(_delta: float) -> void:
 
 func _on_tool_changed(tool: PaintTool) -> void:
 	paint_tool = tool
+	pick_button.button_pressed = false
+
+
+func _on_pick_toggled(v: bool) -> void:
+	if v:
+		paint_tool = PaintTool.PICK
 
 
 func _on_tileset_changed() -> void:
@@ -354,7 +361,10 @@ func canvas_input(event: InputEvent) -> bool:
 	if event is InputEventMouseMotion:
 		if mouse_current == mouse_prev:
 			return false
-		if mouse_down:
+		if paint_tool == PaintTool.BUCKET and not mouse_down:
+			draw_overlay = true
+			update_overlay.emit()
+		elif mouse_down:
 			draw_overlay = true
 			update_overlay.emit()
 			if paint_tool == PaintTool.DRAW:
@@ -383,9 +393,18 @@ func canvas_input(event: InputEvent) -> bool:
 			_pick_at_mouse()
 			return true
 
+		if paint_tool == PaintTool.PICK and event.button_index == MOUSE_BUTTON_LEFT:
+			_pick_at_mouse()
+			pick_button.button_pressed = false
+			paint_tool = PaintTool.DRAW
+			draw_button.button_pressed = true
+			return true
+
 		mouse_down = true
 		mouse_start = mouse_current
+		mouse_prev = mouse_current
 		draw_overlay = true
+		update_overlay.emit()
 		drag_action_index += 1
 		drag_action_count = 0
 
@@ -595,15 +614,24 @@ func _get_selected_terrain() -> Dictionary:
 # ---- CANVAS OVERLAY ----
 
 func canvas_draw(overlay: Control) -> void:
-	if not draw_overlay or not mouse_down or not tilemap:
+	if not draw_overlay or not tilemap:
 		return
 
-	var t := _get_selected_terrain()
-	if selected_index >= 0 and t.is_empty():
+	var is_bucket_preview := paint_tool == PaintTool.BUCKET and not mouse_down
+	if not is_bucket_preview and not mouse_down:
 		return
 
-	var color := Color(1.0, 0.3, 0.3, 0.5) if selected_index < 0 else Color(t.color, 0.6)
-	var cells := _get_brush_cells()
+	var color: Color
+	if selected_index < 0:
+		color = Color(0.0, 0.0, 0.0, 0.35)
+	else:
+		color = Color(1.0, 1.0, 1.0, 0.35)
+
+	var cells: Array
+	if is_bucket_preview:
+		cells = _flood_fill(mouse_current)
+	else:
+		cells = _get_brush_cells()
 
 	if cells.is_empty():
 		cells = [mouse_current]
@@ -864,18 +892,12 @@ func _on_layer_highlight_toggled(toggled: bool) -> void:
 	var settings := EditorInterface.get_editor_settings()
 	settings.set_setting("editors/tiles_editor/highlight_selected_layer", toggled)
 	settings.emit_changed()
-	var btn := _find_builtin_button_by_icon(layer_highlight.icon, "TileMapHighlightSelected")
-	if btn:
-		btn.toggled.emit(toggled)
 
 
 func _on_layer_grid_toggled(toggled: bool) -> void:
 	var settings := EditorInterface.get_editor_settings()
 	settings.set_setting("editors/tiles_editor/display_grid", toggled)
 	settings.emit_changed()
-	var btn := _find_builtin_button_by_icon(layer_grid.icon, "Grid")
-	if btn:
-		btn.toggled.emit(toggled)
 
 
 func about_to_be_visible() -> void:
