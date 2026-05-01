@@ -3,15 +3,7 @@ extends Control
 
 signal update_overlay
 
-enum PaintTool {
-	NONE,
-	DRAW,
-	LINE,
-	RECT,
-	BUCKET,
-	PICK,
-	ERASE,
-}
+enum PaintTool { NONE, DRAW, LINE, RECT, BUCKET, PICK, ERASE }
 
 @onready var draw_button: Button = %Draw
 @onready var line_button: Button = %Line
@@ -21,32 +13,26 @@ enum PaintTool {
 @onready var erase_button: Button = %Erase
 @onready var erase_all_button: Button = %EraseAll
 
-@onready var layer_up: Button = %LayerUp
-@onready var layer_down: Button = %LayerDown
-@onready var layer_select: OptionButton = %LayerSelect
 @onready var layer_highlight: Button = %LayerHighlight
 @onready var layer_grid: Button = %LayerGrid
-
-@onready var quick_mode_button: Button = %QuickMode
+@onready var layer_select: OptionButton = %LayerSelect
 
 @onready var add_terrain_button: Button = %AddTerrain
 @onready var edit_terrain_button: Button = %EditTerrain
 @onready var move_up_button: Button = %MoveUp
 @onready var move_down_button: Button = %MoveDown
 @onready var remove_terrain_button: Button = %RemoveTerrain
+@onready var options_button: Button = %QuickMode
 
 @onready var terrain_grid: HFlowContainer = %TerrainGrid
-@onready var scroll_container: ScrollContainer = %TerrainScroll
 @onready var empty_label: Label = %EmptyLabel
 
 var tilemap: TileMapLayer = null:
 	set(v):
 		tilemap = v
-		if v:
-			tileset = v.tile_set
-		else:
-			tileset = null
+		tileset = v.tile_set if v else null
 		_update_layer_dropdown.call_deferred()
+		_update_erase_buttons.call_deferred()
 
 var tileset: TileSet = null:
 	set(v):
@@ -60,17 +46,17 @@ var tileset: TileSet = null:
 
 var undo_manager: EditorUndoRedoManager
 
-var flattened_terrains: Array[Dictionary] = []  # [{set, idx, name, color, icon_texture, icon_region}]
-var selected_index: int = -1             # -1 = erase
+var flattened_terrains: Array[Dictionary] = []
+var selected_index: int = -1
 var paint_tool: PaintTool = PaintTool.DRAW
 var _prev_tool: PaintTool = PaintTool.DRAW
+var _tool_buttons: Array[Button] = []
 
 var draw_overlay: bool = false
 var mouse_down: bool = false
 var mouse_start: Vector2i = Vector2i.ZERO
 var mouse_current: Vector2i = Vector2i.ZERO
 var mouse_prev: Vector2i = Vector2i.ZERO
-var mouse_on_canvas: bool = false
 var drag_erasing: bool = false
 var drag_action_index: int = 0
 var drag_action_count: int = 0
@@ -83,11 +69,9 @@ func _ready() -> void:
 	fill_button.icon = get_theme_icon("Bucket", "EditorIcons")
 	pick_button.icon = get_theme_icon("ColorPick", "EditorIcons")
 	erase_button.icon = get_theme_icon("Eraser", "EditorIcons")
-
 	erase_all_button.icon = get_theme_icon("Clear", "EditorIcons")
+	erase_all_button.self_modulate = Color(1.0, 0.3, 0.3, 1.0)
 
-	layer_up.icon = get_theme_icon("MoveUp", "EditorIcons")
-	layer_down.icon = get_theme_icon("MoveDown", "EditorIcons")
 	layer_highlight.icon = get_theme_icon("TileMapHighlightSelected", "EditorIcons")
 	layer_grid.icon = get_theme_icon("Grid", "EditorIcons")
 
@@ -96,7 +80,7 @@ func _ready() -> void:
 	move_up_button.icon = get_theme_icon("ArrowUp", "EditorIcons")
 	move_down_button.icon = get_theme_icon("ArrowDown", "EditorIcons")
 	remove_terrain_button.icon = get_theme_icon("Remove", "EditorIcons")
-	quick_mode_button.icon = get_theme_icon("GuiTabMenuHl", "EditorIcons")
+	options_button.icon = get_theme_icon("GuiTabMenuHl", "EditorIcons")
 
 	draw_button.pressed.connect(_on_tool_changed.bind(PaintTool.DRAW))
 	line_button.pressed.connect(_on_tool_changed.bind(PaintTool.LINE))
@@ -106,13 +90,11 @@ func _ready() -> void:
 	erase_button.pressed.connect(_on_tool_changed.bind(PaintTool.ERASE))
 	erase_all_button.pressed.connect(_on_erase_all)
 
-	layer_up.pressed.connect(_on_layer_up)
-	layer_down.pressed.connect(_on_layer_down)
 	layer_select.item_selected.connect(_on_layer_selected)
 	layer_highlight.toggled.connect(_on_layer_highlight_toggled)
 	layer_grid.toggled.connect(_on_layer_grid_toggled)
 
-	quick_mode_button.pressed.connect(_on_quick_mode_toggled)
+	options_button.pressed.connect(_on_options_toggled)
 
 	add_terrain_button.pressed.connect(_on_add_terrain)
 	edit_terrain_button.pressed.connect(_on_edit_terrain)
@@ -121,12 +103,9 @@ func _ready() -> void:
 	remove_terrain_button.pressed.connect(_on_remove_terrain)
 
 	draw_button.button_pressed = true
-	_on_quick_mode_toggled()
+	_tool_buttons = [null, draw_button, line_button, rect_button, fill_button, pick_button, erase_button]
+	_on_options_toggled()
 	_show_empty(true)
-
-
-func _process(_delta: float) -> void:
-	scroll_container.scroll_horizontal = 0
 
 
 func _on_tool_changed(tool: PaintTool) -> void:
@@ -137,20 +116,15 @@ func _on_tool_changed(tool: PaintTool) -> void:
 
 func _select_tool_button(tool: PaintTool) -> void:
 	paint_tool = tool
-	match tool:
-		PaintTool.DRAW: draw_button.button_pressed = true
-		PaintTool.LINE: line_button.button_pressed = true
-		PaintTool.RECT: rect_button.button_pressed = true
-		PaintTool.BUCKET: fill_button.button_pressed = true
-		PaintTool.PICK: pick_button.button_pressed = true
-		PaintTool.ERASE: erase_button.button_pressed = true
+	if tool > 0 and tool < _tool_buttons.size():
+		_tool_buttons[tool].button_pressed = true
 
 
 func _on_tileset_changed() -> void:
 	_refresh_terrains.call_deferred()
 
 
-# ---- TERRAIN READING & GRID ----
+# ---- TERRAIN GRID ----
 
 var _icon_cache: Dictionary = {}
 
@@ -158,15 +132,11 @@ var _icon_cache: Dictionary = {}
 func _refresh_terrains() -> void:
 	for c in terrain_grid.get_children():
 		c.queue_free()
-
 	flattened_terrains.clear()
-
 	if not tileset:
 		_show_empty(true)
 		return
-
 	_build_icon_cache()
-
 	var terrain_count := 0
 	for set_idx in tileset.get_terrain_sets_count():
 		for ter_idx in tileset.get_terrains_count(set_idx):
@@ -174,39 +144,26 @@ func _refresh_terrains() -> void:
 			var color := tileset.get_terrain_color(set_idx, ter_idx)
 			var key := "%d:%d" % [set_idx, ter_idx]
 			var icon: Dictionary = _icon_cache.get(key, {})
-			flattened_terrains.append({
-				set = set_idx,
-				idx = ter_idx,
-				name = name,
-				color = color,
-				icon_texture = icon.get("texture", null),
-				icon_region = icon.get("region", Rect2i())
-			})
+			flattened_terrains.append({set = set_idx, idx = ter_idx, name = name, color = color, icon_texture = icon.get("texture", null)})
 			terrain_count += 1
-
 	if terrain_count == 0:
 		_show_empty(true)
 		return
-
 	_show_empty(false)
-
 	for i in flattened_terrains.size():
 		_create_terrain_entry(flattened_terrains[i], i)
-
 	if selected_index == -1 and flattened_terrains.size() > 0:
 		selected_index = 0
-
 	if selected_index >= flattened_terrains.size():
 		selected_index = -1
-
 	_update_management_buttons()
-	call_deferred("_update_selection_buttons")
+	_update_selection_buttons()
+	_update_erase_buttons.call_deferred()
 	call_deferred("_update_layer_dropdown")
 
 
 func _show_empty(show: bool) -> void:
 	empty_label.visible = show
-	scroll_container.visible = not show
 
 
 func _build_icon_cache() -> void:
@@ -233,48 +190,38 @@ func _cache_terrain_icon(td: TileData, source: TileSetAtlasSource, coord: Vector
 	if td.terrain >= 0:
 		var key_center := "%d:%d" % [set_idx, td.terrain]
 		if not _icon_cache.has(key_center) and source.texture:
-			_icon_cache[key_center] = _make_icon(source, coord, alt_id)
+			_icon_cache[key_center] = _make_icon(source, coord)
 
 
-func _discover_terrain_icon(set_idx: int, ter_idx: int) -> Dictionary:
-	return _icon_cache.get("%d:%d" % [set_idx, ter_idx], {})
-
-
-func _make_icon(source: TileSetAtlasSource, coord: Vector2i, alt_id: int) -> Dictionary:
+func _make_icon(source: TileSetAtlasSource, coord: Vector2i) -> Dictionary:
 	if not source or not source.texture:
 		return {}
 	var atlas_tex := AtlasTexture.new()
 	atlas_tex.atlas = source.texture
 	var region := source.get_tile_texture_region(coord, 0)
 	atlas_tex.region = region
-	return {
-		texture = atlas_tex,
-		region = region
-	}
+	return {texture = atlas_tex}
 
 
 func _create_terrain_entry(data: Dictionary, index: int) -> void:
-	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(72, 72)
-	panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	panel.mouse_filter = Control.MOUSE_FILTER_PASS
-	var empty_style := StyleBoxFlat.new()
-	empty_style.bg_color = Color(0, 0, 0, 0)
-	empty_style.content_margin_left = 0
-	empty_style.content_margin_right = 0
-	empty_style.content_margin_top = 0
-	empty_style.content_margin_bottom = 0
-	panel.add_theme_stylebox_override("panel", empty_style)
+	var btn := Button.new()
+	btn.custom_minimum_size = Vector2(72, 72)
+	btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	btn.toggle_mode = true
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.flat = true
 
 	var inner := VBoxContainer.new()
 	inner.add_theme_constant_override("separation", 0)
-	panel.add_child(inner)
+	inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn.add_child(inner)
 
 	var tex := TextureRect.new()
 	tex.custom_minimum_size = Vector2(68, 52)
 	tex.size_flags_horizontal = Control.SIZE_FILL
 	tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	tex.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if data.icon_texture:
 		tex.texture = data.icon_texture
 	inner.add_child(tex)
@@ -283,43 +230,33 @@ func _create_terrain_entry(data: Dictionary, index: int) -> void:
 	label.text = data.name
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.add_theme_font_size_override("font_size", 10)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	inner.add_child(label)
 
-	panel.gui_input.connect(_on_entry_gui_input.bind(panel, index))
-	terrain_grid.add_child(panel)
-
+	btn.tooltip_text = "%s (Set %d, Terrain %d)" % [data.name, data.set, data.idx]
+	btn.pressed.connect(_on_terrain_selected.bind(index))
+	terrain_grid.add_child(btn)
 	if index == selected_index:
-		_update_entry_style(panel, true)
+		btn.button_pressed = true
 
 
-func _on_entry_gui_input(event: InputEvent, panel: PanelContainer, index: int) -> void:
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		selected_index = index
-		_update_selection_buttons()
+func _on_terrain_selected(index: int) -> void:
+	selected_index = index
+	for c in terrain_grid.get_children():
+		var btn := c as Button
+		if not btn:
+			continue
+		btn.button_pressed = (c.get_index() == index)
+	_update_management_buttons()
 
 
-func _update_entry_style(panel: PanelContainer, selected: bool) -> void:
-	if selected:
-		var style := StyleBoxFlat.new()
-		style.bg_color = Color(0, 0, 0, 0)
-		style.border_width_left = 2
-		style.border_width_right = 2
-		style.border_width_top = 2
-		style.border_width_bottom = 2
-		style.border_color = Color(1.0, 1.0, 1.0, 0.8)
-		style.content_margin_left = 0
-		style.content_margin_right = 0
-		style.content_margin_top = 0
-		style.content_margin_bottom = 0
-		panel.add_theme_stylebox_override("panel", style)
-	else:
-		var empty_style := StyleBoxFlat.new()
-		empty_style.bg_color = Color(0, 0, 0, 0)
-		empty_style.content_margin_left = 0
-		empty_style.content_margin_right = 0
-		empty_style.content_margin_top = 0
-		empty_style.content_margin_bottom = 0
-		panel.add_theme_stylebox_override("panel", empty_style)
+func _update_selection_buttons() -> void:
+	for i in terrain_grid.get_child_count():
+		var btn := terrain_grid.get_child(i) as Button
+		if not btn:
+			continue
+		btn.button_pressed = (i == selected_index)
+	_update_management_buttons()
 
 
 func _update_management_buttons() -> void:
@@ -330,26 +267,102 @@ func _update_management_buttons() -> void:
 	remove_terrain_button.disabled = not editable
 
 
-func _on_quick_mode_toggled() -> void:
-	add_terrain_button.visible = quick_mode_button.button_pressed
-	edit_terrain_button.visible = quick_mode_button.button_pressed
-	move_up_button.visible = quick_mode_button.button_pressed
-	move_down_button.visible = quick_mode_button.button_pressed
-	remove_terrain_button.visible = quick_mode_button.button_pressed
+func _update_erase_buttons() -> void:
+	var has_tiles := tilemap != null and tilemap.get_used_cells().size() > 0
+	erase_button.disabled = not has_tiles
+	erase_all_button.disabled = not has_tiles
 
 
-# ---- SAVE / RESTORE CELL STATE ----
+func _update_layer_dropdown() -> void:
+	layer_select.clear()
+	if not tilemap:
+		layer_select.disabled = true
+		return
+	var root := EditorInterface.get_edited_scene_root()
+	if not root:
+		layer_select.disabled = true
+		layer_select.add_item(tilemap.name)
+		layer_select.select(0)
+		return
+	var siblings: Array[Node] = []
+	_collect_visible_tilemap_layers(root, siblings)
+	if siblings.size() <= 1:
+		layer_select.disabled = true
+		layer_select.add_item(tilemap.name)
+		layer_select.select(0)
+		return
+	for i in siblings.size():
+		var lyr: TileMapLayer = siblings[i]
+		layer_select.add_item(lyr.name)
+		if lyr == tilemap:
+			layer_select.select(i)
+	layer_select.disabled = false
+
+
+func _collect_visible_tilemap_layers(node: Node, result: Array[Node]) -> void:
+	for child in node.get_children():
+		if child is TileMapLayer and child.visible:
+			result.append(child)
+		if child is Node:
+			_collect_visible_tilemap_layers(child, result)
+
+
+func _on_layer_selected(idx: int) -> void:
+	var root := EditorInterface.get_edited_scene_root()
+	if not root:
+		return
+	var siblings: Array[Node] = []
+	_collect_visible_tilemap_layers(root, siblings)
+	if idx >= 0 and idx < siblings.size():
+		EditorInterface.edit_node(siblings[idx])
+
+
+func _on_options_toggled() -> void:
+	var v := options_button.button_pressed
+	add_terrain_button.visible = v
+	edit_terrain_button.visible = v
+	move_up_button.visible = v
+	move_down_button.visible = v
+	remove_terrain_button.visible = v
+
+
+func _on_layer_highlight_toggled(toggled: bool) -> void:
+	var settings := EditorInterface.get_editor_settings()
+	settings.set_setting("editors/tiles_editor/highlight_selected_layer", toggled)
+	settings.emit_changed()
+	update_overlay.emit()
+
+
+func _on_layer_grid_toggled(toggled: bool) -> void:
+	var settings := EditorInterface.get_editor_settings()
+	settings.set_setting("editors/tiles_editor/display_grid", toggled)
+	settings.emit_changed()
+	update_overlay.emit()
+
+
+func about_to_be_visible() -> void:
+	if tilemap and tileset != tilemap.tile_set:
+		tileset = tilemap.tile_set
+	var settings := EditorInterface.get_editor_settings()
+	layer_highlight.set_pressed_no_signal(settings.get_setting("editors/tiles_editor/highlight_selected_layer"))
+	layer_grid.set_pressed_no_signal(settings.get_setting("editors/tiles_editor/display_grid"))
+	_update_erase_buttons()
+	_update_selection_buttons()
+
+
+func _get_selected_terrain() -> Dictionary:
+	if selected_index >= 0 and selected_index < flattened_terrains.size():
+		return flattened_terrains[selected_index]
+	return {}
+
+
+# ---- SAVE / RESTORE ----
 
 func _save_cells(coords: Array) -> Dictionary:
 	var state := {}
 	for c in coords:
 		var src := tilemap.get_cell_source_id(c)
-		state[c] = {
-			has_cell = src != -1,
-			source_id = src if src != -1 else 0,
-			atlas_coords = tilemap.get_cell_atlas_coords(c) if src != -1 else Vector2i.ZERO,
-			alternative_tile = tilemap.get_cell_alternative_tile(c) if src != -1 else 0
-		}
+		state[c] = {has_cell = src != -1, source_id = src if src != -1 else 0, atlas_coords = tilemap.get_cell_atlas_coords(c) if src != -1 else Vector2i.ZERO, alternative_tile = tilemap.get_cell_alternative_tile(c) if src != -1 else 0}
 	return state
 
 
@@ -367,12 +380,10 @@ func _restore_cells(saved: Dictionary, tm: TileMapLayer) -> void:
 func canvas_input(event: InputEvent) -> bool:
 	if not tilemap or not tileset:
 		return false
-
 	if not event is InputEventMouse:
 		return false
-
 	if event is InputEventMouseButton:
-		if event.button_index == MOUSE_BUTTON_WHEEL_UP or event.button_index == MOUSE_BUTTON_WHEEL_DOWN or event.button_index == MOUSE_BUTTON_WHEEL_LEFT or event.button_index == MOUSE_BUTTON_WHEEL_RIGHT:
+		if event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN, MOUSE_BUTTON_WHEEL_LEFT, MOUSE_BUTTON_WHEEL_RIGHT]:
 			return false
 
 	var transform := _canvas_tilemap_transform()
@@ -408,7 +419,7 @@ func canvas_input(event: InputEvent) -> bool:
 		if event.button_index == MOUSE_BUTTON_RIGHT:
 			drag_erasing = true
 		elif event.button_index == MOUSE_BUTTON_LEFT:
-			drag_erasing = paint_tool == PaintTool.ERASE or erase_button.button_pressed
+			drag_erasing = paint_tool == PaintTool.ERASE
 		else:
 			return false
 
@@ -417,9 +428,8 @@ func canvas_input(event: InputEvent) -> bool:
 			return true
 
 		if paint_tool == PaintTool.PICK and event.button_index == MOUSE_BUTTON_LEFT:
-			_pick_at_mouse()
-			var prev := _prev_tool
-			_select_tool_button(prev)
+			if _pick_at_mouse():
+				_select_tool_button(_prev_tool)
 			return true
 
 		mouse_down = true
@@ -437,9 +447,7 @@ func canvas_input(event: InputEvent) -> bool:
 			update_overlay.emit()
 		else:
 			_do_paint_stroke()
-
 		return true
-
 	return false
 
 
@@ -453,14 +461,11 @@ func _commit_paint_action() -> void:
 		return
 	if not undo_manager or not tileset:
 		return
-
 	var cells := _get_brush_cells()
 	if cells.is_empty():
 		return
-
 	var saved := _save_cells(_expand_cells(cells))
 	var t := _get_selected_terrain()
-
 	if drag_erasing or selected_index < 0:
 		undo_manager.create_action("Erase Action", UndoRedo.MERGE_DISABLE, tilemap)
 		for c in cells:
@@ -470,7 +475,6 @@ func _commit_paint_action() -> void:
 		undo_manager.create_action("Paint Action", UndoRedo.MERGE_DISABLE, tilemap)
 		undo_manager.add_do_method(tilemap, "set_cells_terrain_connect", cells, t.set, t.idx, true)
 		undo_manager.add_undo_method(self, "_restore_cells", saved, tilemap)
-
 	undo_manager.commit_action()
 
 
@@ -478,14 +482,11 @@ func _do_paint_stroke() -> void:
 	var cells := _get_stroke_cells()
 	if cells.is_empty():
 		return
-
 	if not undo_manager:
 		return
-
 	var expand := _expand_cells(cells)
 	var saved := _save_cells(expand)
 	var t := _get_selected_terrain()
-
 	if drag_erasing or selected_index < 0:
 		undo_manager.create_action("Erase Terrain" + str(drag_action_index), UndoRedo.MERGE_ALL, tilemap, true)
 		for c in cells:
@@ -497,14 +498,13 @@ func _do_paint_stroke() -> void:
 		undo_manager.add_undo_method(self, "_restore_cells", saved, tilemap)
 	else:
 		return
-
 	undo_manager.commit_action()
 	drag_action_count += 1
 
 
 func _get_stroke_cells() -> Array[Vector2i]:
 	match paint_tool:
-		PaintTool.DRAW:
+		PaintTool.DRAW, PaintTool.ERASE:
 			if mouse_prev == mouse_current:
 				return [mouse_current]
 			return _bresenham_line(mouse_prev, mouse_current)
@@ -544,13 +544,10 @@ func _do_bucket_fill(erasing: bool) -> void:
 	var cells := _flood_fill(mouse_current)
 	if cells.is_empty():
 		return
-
 	if not undo_manager:
 		return
-
 	var saved := _save_cells(_expand_cells(cells))
 	var t := _get_selected_terrain()
-
 	if erasing or selected_index < 0:
 		undo_manager.create_action("Erase Fill", UndoRedo.MERGE_DISABLE, tilemap)
 		for c in cells:
@@ -562,7 +559,6 @@ func _do_bucket_fill(erasing: bool) -> void:
 		undo_manager.add_undo_method(self, "_restore_cells", saved, tilemap)
 	else:
 		return
-
 	undo_manager.commit_action()
 
 
@@ -570,11 +566,9 @@ func _flood_fill(start: Vector2i) -> Array:
 	var target_src := tilemap.get_cell_source_id(start)
 	var bounds := tilemap.get_used_rect()
 	bounds = bounds.grow(1)
-
 	var checked := {}
 	var pending := [start]
 	var result: Array[Vector2i] = []
-
 	while not pending.is_empty():
 		var p: Vector2i = pending.pop_front()
 		if p in checked:
@@ -582,52 +576,33 @@ func _flood_fill(start: Vector2i) -> Array:
 		checked[p] = true
 		if not bounds.has_point(p):
 			continue
-
 		var src := tilemap.get_cell_source_id(p)
 		if target_src == -1:
 			if src != -1:
 				continue
-		else:
-			if src != target_src:
-				continue
-
+		elif src != target_src:
+			continue
 		result.append(p)
 		for nb in [Vector2i.RIGHT, Vector2i.LEFT, Vector2i.UP, Vector2i.DOWN]:
 			pending.append(p + nb)
-
 	return result
 
 
-func _pick_at_mouse() -> void:
+func _pick_at_mouse() -> bool:
 	var td := tilemap.get_cell_tile_data(mouse_current)
 	if not td:
-		return
+		return false
 	var ts := td.terrain_set
 	var tr := td.terrain
 	if ts < 0 or tr < 0:
-		return
-
+		return false
 	for i in flattened_terrains.size():
-		var f = flattened_terrains[i]
+		var f: Dictionary = flattened_terrains[i]
 		if f.set == ts and f.idx == tr:
 			selected_index = i
 			_update_selection_buttons()
-			return
-
-
-func _update_selection_buttons() -> void:
-	for i in terrain_grid.get_child_count():
-		var panel := terrain_grid.get_child(i) as PanelContainer
-		if not panel:
-			continue
-		_update_entry_style(panel, i == selected_index)
-	_update_management_buttons()
-
-
-func _get_selected_terrain() -> Dictionary:
-	if selected_index >= 0 and selected_index < flattened_terrains.size():
-		return flattened_terrains[selected_index]
-	return {}
+			return true
+	return false
 
 
 # ---- CANVAS OVERLAY ----
@@ -635,21 +610,20 @@ func _get_selected_terrain() -> Dictionary:
 func canvas_draw(overlay: Control) -> void:
 	if not draw_overlay or not tilemap:
 		return
-
 	if not mouse_down:
 		if paint_tool == PaintTool.PICK or paint_tool == PaintTool.ERASE:
 			var td := tilemap.get_cell_tile_data(mouse_current)
 			if not td or td.terrain_set < 0 or td.terrain < 0:
 				return
-
 	var color: Color
-	if mouse_down and drag_erasing:
+	if paint_tool == PaintTool.PICK:
+		color = Color(0.2, 0.8, 1.0, 0.35)
+	elif mouse_down and drag_erasing:
 		color = Color(0.0, 0.0, 0.0, 0.35)
 	elif paint_tool == PaintTool.ERASE or selected_index < 0:
 		color = Color(0.0, 0.0, 0.0, 0.35)
 	else:
 		color = Color(1.0, 1.0, 1.0, 0.35)
-
 	var cells: Array
 	if paint_tool == PaintTool.BUCKET and not mouse_down:
 		cells = _flood_fill(mouse_current)
@@ -657,12 +631,10 @@ func canvas_draw(overlay: Control) -> void:
 		cells = _get_brush_cells()
 	if cells.is_empty():
 		cells = [mouse_current]
-
 	var transform := _canvas_tilemap_transform()
 	var cell_size := tileset.tile_size
 	const HALF := 0.5
 	var polygon := PackedVector2Array([Vector2(-HALF, -HALF), Vector2(HALF, -HALF), Vector2(HALF, HALF), Vector2(-HALF, HALF)])
-
 	for c in cells:
 		var cell_transform := Transform2D(0.0, cell_size, 0.0, tilemap.map_to_local(c))
 		overlay.draw_colored_polygon(transform * cell_transform * polygon, color)
@@ -680,17 +652,15 @@ func _canvas_tilemap_transform() -> Transform2D:
 	return transform
 
 
-# ---- BRESENHAM / LINE ----
+# ---- LINE ALGORITHMS ----
 
 func _bresenham_line(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
 	if from == to:
 		return [to]
-
 	var points: Array[Vector2i] = []
 	var delta := (to - from).abs() * 2
 	var step := (to - from).sign()
 	var current := from
-
 	if delta.x > delta.y:
 		var err := delta.x / 2
 		while current.x != to.x:
@@ -709,7 +679,6 @@ func _bresenham_line(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
 				current.x += step.x
 				err += delta.y
 			current.y += step.y
-
 	points.append(current)
 	return points
 
@@ -717,34 +686,28 @@ func _bresenham_line(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
 func _tileset_line(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
 	if tileset.tile_shape == TileSet.TILE_SHAPE_SQUARE:
 		return _bresenham_line(from, to)
-
 	var points: Array[Vector2i] = []
 	var transposed := tileset.get_tile_offset_axis() == TileSet.TILE_OFFSET_AXIS_VERTICAL
-
 	var f := from
 	var t := to
 	if transposed:
 		f = Vector2i(from.y, from.x)
 		t = Vector2i(to.y, to.x)
-
 	var delta := Vector2i(2 * (t.x - f.x) + abs(posmod(t.y, 2)) - abs(posmod(f.y, 2)), t.y - f.y)
 	var sign := delta.sign()
 	var current := f
 	points.append(Vector2i(current.y, current.x) if transposed else current)
-
 	var err := 0
 	if abs(delta.y) < abs(delta.x):
 		var err_step := 3 * delta.abs()
 		while current != t:
 			err += err_step.y
 			if err > abs(delta.x):
-				if sign.x == 0:
-					current += Vector2i(sign.y, 0)
-				else:
-					current += Vector2i(sign.x if bool(current.y % 2) != (sign.x < 0) else 0, sign.y)
+				current.x += (sign.x if bool(current.y % 2) != (sign.x < 0) else 0) if sign.x != 0 else sign.y
+				current.y += sign.y
 				err -= err_step.x
 			else:
-				current += Vector2i(sign.x, 0)
+				current.x += sign.x
 				err += err_step.y
 			points.append(Vector2i(current.y, current.x) if transposed else current)
 	else:
@@ -752,19 +715,14 @@ func _tileset_line(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
 		while current != t:
 			err += err_step.x
 			if err > 0:
-				if sign.x == 0:
-					current += Vector2i(0, sign.y)
-				else:
-					current += Vector2i(sign.x if bool(current.y % 2) != (sign.x < 0) else 0, sign.y)
+				current.x += (sign.x if bool(current.y % 2) != (sign.x < 0) else 0) if sign.x != 0 else sign.y
+				current.y += sign.y
 				err -= err_step.y
 			else:
-				if sign.x == 0:
-					current += Vector2i(0, sign.y)
-				else:
-					current += Vector2i(-sign.x if bool(current.y % 2) != (sign.x > 0) else 0, sign.y)
+				current.x += (-sign.x if bool(current.y % 2) != (sign.x > 0) else 0) if sign.x != 0 else sign.y
+				current.y += sign.y
 				err += err_step.y
 			points.append(Vector2i(current.y, current.x) if transposed else current)
-
 	return points
 
 
@@ -779,7 +737,6 @@ func _on_add_terrain() -> void:
 func _do_add_terrain() -> void:
 	if not tileset or not undo_manager:
 		return
-
 	var terrain_set := 0
 	if tileset.get_terrain_sets_count() == 0:
 		undo_manager.create_action("Add Terrain Set", UndoRedo.MERGE_DISABLE, tileset)
@@ -787,11 +744,9 @@ func _do_add_terrain() -> void:
 		undo_manager.add_undo_method(tileset, "remove_terrain_set", 0)
 		undo_manager.commit_action()
 		await get_tree().process_frame
-
 	terrain_set = tileset.get_terrain_sets_count() - 1
 	if terrain_set < 0:
 		terrain_set = 0
-
 	var ter_pos := tileset.get_terrains_count(terrain_set)
 	undo_manager.create_action("Add Terrain", UndoRedo.MERGE_DISABLE, tileset)
 	undo_manager.add_do_method(tileset, "add_terrain", terrain_set, ter_pos)
@@ -813,30 +768,22 @@ func _on_edit_terrain() -> void:
 func _do_edit_terrain() -> void:
 	if not tileset or not undo_manager or selected_index < 0:
 		return
-
 	var t: Dictionary = flattened_terrains[selected_index]
-
 	var dialog := AcceptDialog.new()
 	dialog.title = "Edit Terrain"
 	dialog.ok_button_text = "Save"
 	dialog.custom_minimum_size = Vector2(300, 0)
-
 	var vbox := VBoxContainer.new()
 	dialog.add_child(vbox)
-
 	var name_edit := LineEdit.new()
 	name_edit.text = t.name
-	name_edit.placeholder_text = "Terrain name"
 	vbox.add_child(name_edit)
-
 	var color_picker := ColorPickerButton.new()
 	color_picker.color = t.color
 	vbox.add_child(color_picker)
-
 	EditorInterface.popup_dialog_centered(dialog)
 	var confirmed := await _await_dialog(dialog)
 	dialog.queue_free()
-
 	if confirmed:
 		undo_manager.create_action("Edit Terrain", UndoRedo.MERGE_DISABLE, tileset)
 		undo_manager.add_do_method(tileset, "set_terrain_name", t.set, t.idx, name_edit.text)
@@ -857,15 +804,12 @@ func _on_remove_terrain() -> void:
 func _do_remove_terrain() -> void:
 	if not tileset or not undo_manager or selected_index < 0:
 		return
-
 	var t: Dictionary = flattened_terrains[selected_index]
-
 	var dialog := ConfirmationDialog.new()
 	dialog.dialog_text = "Remove terrain '%s'?" % t.name
 	EditorInterface.popup_dialog_centered(dialog)
 	var confirmed := await _await_dialog(dialog)
 	dialog.queue_free()
-
 	if confirmed:
 		undo_manager.create_action("Remove Terrain", UndoRedo.MERGE_DISABLE, tileset)
 		undo_manager.add_do_method(tileset, "remove_terrain", t.set, t.idx)
@@ -881,148 +825,46 @@ func _do_remove_terrain() -> void:
 func _on_move_terrain(down: bool) -> void:
 	if not tileset or not undo_manager or selected_index < 0:
 		return
-
 	var index_to := selected_index + (1 if down else -1)
 	if index_to < 0 or index_to >= flattened_terrains.size():
 		return
-
 	var t: Dictionary = flattened_terrains[selected_index]
-
 	undo_manager.create_action("Move Terrain", UndoRedo.MERGE_DISABLE, tileset)
 	undo_manager.add_do_method(tileset, "move_terrain", t.set, t.idx, index_to)
 	undo_manager.add_undo_method(tileset, "move_terrain", t.set, index_to, selected_index)
 	undo_manager.add_do_method(self, "_refresh_terrains")
 	undo_manager.add_undo_method(self, "_refresh_terrains")
 	undo_manager.commit_action()
-
 	selected_index = index_to
 	_refresh_terrains()
 
 
-# ---- LAYER CONTROLS ----
-
-func _find_builtin_button_by_icon(our_icon: Texture2D, fallback_name: String) -> Button:
-	var base := EditorInterface.get_base_control()
-	if not base:
-		return null
-	var editors := base.find_children("*", "TileMapLayerEditor", true, false)
-	if editors.is_empty():
-		return null
-	var fresh_icon := get_theme_icon(fallback_name, "EditorIcons")
-	var buttons := editors[0].find_children("*", "Button", true, false)
-	for btn: Button in buttons:
-		if btn.icon == fresh_icon or btn.icon == our_icon:
-			return btn
-	return null
-
+# ---- ERASE ALL ----
 
 func _on_erase_all() -> void:
 	if not tilemap or not undo_manager:
 		return
-	_do_erase_all.call_deferred()
-
-
-func _do_erase_all() -> void:
-	if not tilemap or not undo_manager:
-		return
-
 	var dialog := ConfirmationDialog.new()
 	dialog.dialog_text = "Erase ALL tiles on layer '%s'?" % tilemap.name
 	dialog.get_ok_button().text = "Erase All"
 	EditorInterface.popup_dialog_centered(dialog)
-	var confirmed := await _await_dialog(dialog)
-	dialog.queue_free()
-
-	if confirmed:
-		var cells := tilemap.get_used_cells()
-		var saved := _save_cells(cells)
-		undo_manager.create_action("Erase All on " + tilemap.name, UndoRedo.MERGE_DISABLE, tilemap)
-		for c in cells:
-			undo_manager.add_do_method(tilemap, "erase_cell", c)
-		undo_manager.add_undo_method(self, "_restore_cells", saved, tilemap)
-		undo_manager.commit_action()
+	dialog.confirmed.connect(func():
+		_erase_all_tiles()
+		dialog.queue_free()
+	)
+	dialog.canceled.connect(dialog.queue_free)
 
 
-func _on_layer_up() -> void:
-	var btn := _find_builtin_button_by_icon(layer_up.icon, "MoveUp")
-	if btn:
-		btn.pressed.emit()
-
-
-func _update_layer_dropdown() -> void:
-	layer_select.clear()
-	if not tilemap:
-		layer_select.disabled = true
-		layer_up.visible = false
-		layer_down.visible = false
+func _erase_all_tiles() -> void:
+	if not tilemap or not undo_manager:
 		return
-
-	var parent := tilemap.get_parent()
-	if not parent:
-		return
-
-	var siblings: Array[Node] = []
-	for child in parent.get_children():
-		if child is TileMapLayer:
-			siblings.append(child)
-
-	if siblings.size() <= 1:
-		layer_select.disabled = true
-		layer_up.visible = false
-		layer_down.visible = false
-		layer_select.add_item(tilemap.name)
-		layer_select.select(0)
-		return
-
-	for i in siblings.size():
-		var lyr: TileMapLayer = siblings[i]
-		layer_select.add_item(lyr.name)
-		if lyr == tilemap:
-			layer_select.select(i)
-
-	layer_select.disabled = false
-	layer_up.visible = siblings.size() >= 3
-	layer_down.visible = siblings.size() >= 3
-
-
-func _on_layer_selected(idx: int) -> void:
-	var parent := tilemap.get_parent() if tilemap else null
-	if not parent:
-		return
-	var siblings: Array[Node] = []
-	for child in parent.get_children():
-		if child is TileMapLayer:
-			siblings.append(child)
-	if idx >= 0 and idx < siblings.size():
-		EditorInterface.edit_node(siblings[idx])
-
-
-func _on_layer_down() -> void:
-	var btn := _find_builtin_button_by_icon(layer_down.icon, "MoveDown")
-	if btn:
-		btn.pressed.emit()
-
-
-func _on_layer_highlight_toggled(toggled: bool) -> void:
-	var settings := EditorInterface.get_editor_settings()
-	settings.set_setting("editors/tiles_editor/highlight_selected_layer", toggled)
-	settings.emit_changed()
-	update_overlay.emit()
-
-
-func _on_layer_grid_toggled(toggled: bool) -> void:
-	var settings := EditorInterface.get_editor_settings()
-	settings.set_setting("editors/tiles_editor/display_grid", toggled)
-	settings.emit_changed()
-	update_overlay.emit()
-
-
-func about_to_be_visible() -> void:
-	if tilemap and tileset != tilemap.tile_set:
-		tileset = tilemap.tile_set
-	var settings := EditorInterface.get_editor_settings()
-	layer_highlight.set_pressed_no_signal(settings.get_setting("editors/tiles_editor/highlight_selected_layer"))
-	layer_grid.set_pressed_no_signal(settings.get_setting("editors/tiles_editor/display_grid"))
+	var cells := tilemap.get_used_cells()
+	var saved := _save_cells(cells)
+	undo_manager.create_action("Erase All on " + tilemap.name, UndoRedo.MERGE_DISABLE, tilemap)
+	for c in cells:
+		undo_manager.add_do_method(tilemap, "erase_cell", c)
+	undo_manager.add_undo_method(self, "_restore_cells", saved, tilemap)
+	undo_manager.commit_action()
 
 
 # ---- UTILITY ----
