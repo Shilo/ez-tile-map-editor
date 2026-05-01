@@ -25,7 +25,7 @@ project/assembly_name="EZ Tile Map Editor"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/better-terrain/plugin.cfg", "res://addons/ez_tile_map_editor/plugin.cfg")
+enabled=PackedStringArray("res://addons/ez_tile_map_editor/plugin.cfg")
 
 [physics]
 
