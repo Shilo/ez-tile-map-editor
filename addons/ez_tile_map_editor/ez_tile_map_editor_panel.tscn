@@ -2,6 +2,9 @@
 
 [ext_resource type="Script" path="res://addons/ez_tile_map_editor/ez_tile_map_editor_panel.gd" id="1_panel"]
 
+[sub_resource type="ButtonGroup" id="draw_group"]
+allow_unpress = true
+
 [node name="EZTileMapEditorPanel" type="Control"]
 layout_mode = 3
 anchors_preset = 15
@@ -9,6 +12,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+focus_mode = 2
 script = ExtResource("1_panel")
 
 [node name="VBoxContainer" type="VBoxContainer" parent="."]
@@ -19,8 +23,176 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="Label" type="Label" parent="VBoxContainer"]
-layout_mode = 0
-text = "EZ Tile Map Editor"
+[node name="Toolbar" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="Draw" type="Button" parent="VBoxContainer/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Draw terrain
+Shift: Draw line
+Ctrl+Shift: Draw rectangle"
+toggle_mode = true
+button_pressed = true
+button_group = SubResource("draw_group")
+flat = true
+
+[node name="Line" type="Button" parent="VBoxContainer/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Draw line"
+toggle_mode = true
+button_group = SubResource("draw_group")
+flat = true
+
+[node name="Rect" type="Button" parent="VBoxContainer/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Draw rectangle"
+toggle_mode = true
+button_group = SubResource("draw_group")
+flat = true
+
+[node name="Fill" type="Button" parent="VBoxContainer/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Bucket fill terrain"
+toggle_mode = true
+button_group = SubResource("draw_group")
+flat = true
+
+[node name="VSeparator" type="VSeparator" parent="VBoxContainer/Toolbar"]
+layout_mode = 2
+
+[node name="Pick" type="Button" parent="VBoxContainer/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Pick terrain (Ctrl+Click)"
+toggle_mode = true
+flat = true
+
+[node name="Erase" type="Button" parent="VBoxContainer/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Erase terrain"
+toggle_mode = true
+flat = true
+
+[node name="Replace" type="Button" parent="VBoxContainer/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Toggle replace mode"
+toggle_mode = true
+flat = true
+
+[node name="VSeparator2" type="VSeparator" parent="VBoxContainer/Toolbar"]
+layout_mode = 2
+
+[node name="Spacer" type="Control" parent="VBoxContainer/Toolbar"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="LayerUp" type="Button" parent="VBoxContainer/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Select previous layer"
+flat = true
+
+[node name="LayerDown" type="Button" parent="VBoxContainer/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Select next layer"
+flat = true
+
+[node name="LayerHighlight" type="Button" parent="VBoxContainer/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Highlight selected layer"
+toggle_mode = true
+flat = true
+
+[node name="LayerGrid" type="Button" parent="VBoxContainer/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Toggle grid visibility"
+toggle_mode = true
+flat = true
+
+[node name="EmptyLabel" type="Label" parent="VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+text = "No terrain sets defined.
+Use the TileSet bottom panel to add terrains."
 horizontal_alignment = 1
 vertical_alignment = 1
+autowrap_mode = 3
+
+[node name="TerrainScroll" type="ScrollContainer" parent="VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 3
+
+[node name="TerrainGrid" type="HFlowContainer" parent="VBoxContainer/TerrainScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/h_separation = 4
+theme_override_constants/v_separation = 4
+
+[node name="LowerToolbar" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="GridMode" type="Button" parent="VBoxContainer/LowerToolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Toggle grid view"
+toggle_mode = true
+flat = true
+
+[node name="QuickMode" type="Button" parent="VBoxContainer/LowerToolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Toggle quick mode"
+toggle_mode = true
+flat = true
+
+[node name="VSeparator3" type="VSeparator" parent="VBoxContainer/LowerToolbar"]
+layout_mode = 2
+
+[node name="EditTools" type="HBoxContainer" parent="VBoxContainer/LowerToolbar"]
+layout_mode = 2
+size_flags_horizontal = 3
+alignment = 2
+
+[node name="AddTerrain" type="Button" parent="VBoxContainer/LowerToolbar/EditTools"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Add terrain"
+flat = true
+
+[node name="EditTerrain" type="Button" parent="VBoxContainer/LowerToolbar/EditTools"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Edit selected terrain"
+flat = true
+
+[node name="MoveUp" type="Button" parent="VBoxContainer/LowerToolbar/EditTools"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Move selected terrain up"
+flat = true
+
+[node name="MoveDown" type="Button" parent="VBoxContainer/LowerToolbar/EditTools"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Move selected terrain down"
+flat = true
+
+[node name="RemoveTerrain" type="Button" parent="VBoxContainer/LowerToolbar/EditTools"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Remove selected terrain"
+flat = true

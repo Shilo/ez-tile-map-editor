@@ -11,6 +11,18 @@ func _enter_tree() -> void:
 	_button = add_control_to_bottom_panel(_panel, "EZ TileMap")
 	_button.visible = false
 
+	_panel.undo_manager = get_undo_redo()
+
+	_panel.update_overlay.connect(update_overlays)
+
+	var main_screen := get_editor_interface().get_editor_main_screen()
+	main_screen.mouse_exited.connect(_panel.canvas_mouse_exited)
+
+	_button.toggled.connect(func(v: bool):
+		if v:
+			_panel.about_to_be_visible()
+	)
+
 
 func _exit_tree() -> void:
 	if _panel:
@@ -26,7 +38,7 @@ func _handles(object: Object) -> bool:
 
 func _edit(object: Object) -> void:
 	if object is TileMapLayer:
-		_panel.current_tilemap = object
+		_panel.tilemap = object
 
 
 func _make_visible(visible: bool) -> void:
@@ -46,4 +58,15 @@ func _ensure_visible_deferred() -> void:
 
 
 func _clear() -> void:
-	_panel.current_tilemap = null
+	_panel.tilemap = null
+
+
+func _forward_canvas_gui_input(event: InputEvent) -> bool:
+	if not _panel.is_visible_in_tree():
+		return false
+	return _panel.canvas_input(event)
+
+
+func _forward_canvas_draw_over_viewport(overlay: Control) -> void:
+	if _panel.is_visible_in_tree():
+		_panel.canvas_draw(overlay)
