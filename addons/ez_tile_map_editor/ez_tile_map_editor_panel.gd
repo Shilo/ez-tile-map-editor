@@ -124,7 +124,7 @@ func _update_empty_state() -> void:
 		empty_label.visible = true
 		scroll_container.visible = false
 	elif not tilemap.is_visible_in_tree():
-		empty_label.text = "The TileMapLayer is disabled or invisible"
+		empty_label.text = "TileMapLayer is disabled or invisible."
 		empty_label.visible = true
 		scroll_container.visible = false
 	elif not tileset or flattened_terrains.is_empty():
