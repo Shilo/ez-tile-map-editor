@@ -97,7 +97,8 @@ func _ready() -> void:
 	line_button.pressed.connect(_on_tool_changed.bind(PaintTool.LINE))
 	rect_button.pressed.connect(_on_tool_changed.bind(PaintTool.RECT))
 	fill_button.pressed.connect(_on_tool_changed.bind(PaintTool.BUCKET))
-	pick_button.toggled.connect(_on_pick_toggled)
+	pick_button.pressed.connect(_on_tool_changed.bind(PaintTool.PICK))
+	erase_button.pressed.connect(_on_tool_changed.bind(PaintTool.ERASE))
 
 	layer_up.pressed.connect(_on_layer_up)
 	layer_down.pressed.connect(_on_layer_down)
@@ -122,14 +123,20 @@ func _process(_delta: float) -> void:
 
 
 func _on_tool_changed(tool: PaintTool) -> void:
-	_prev_tool = paint_tool
+	if paint_tool != PaintTool.PICK:
+		_prev_tool = paint_tool
 	paint_tool = tool
-	pick_button.button_pressed = false
 
 
-func _on_pick_toggled(v: bool) -> void:
-	if v:
-		paint_tool = PaintTool.PICK
+func _select_tool_button(tool: PaintTool) -> void:
+	paint_tool = tool
+	match tool:
+		PaintTool.DRAW: draw_button.button_pressed = true
+		PaintTool.LINE: line_button.button_pressed = true
+		PaintTool.RECT: rect_button.button_pressed = true
+		PaintTool.BUCKET: fill_button.button_pressed = true
+		PaintTool.PICK: pick_button.button_pressed = true
+		PaintTool.ERASE: erase_button.button_pressed = true
 
 
 func _on_tileset_changed() -> void:
@@ -393,7 +400,7 @@ func canvas_input(event: InputEvent) -> bool:
 		if event.button_index == MOUSE_BUTTON_RIGHT:
 			drag_erasing = true
 		elif event.button_index == MOUSE_BUTTON_LEFT:
-			drag_erasing = erase_button.button_pressed
+			drag_erasing = paint_tool == PaintTool.ERASE or erase_button.button_pressed
 		else:
 			return false
 
@@ -403,8 +410,8 @@ func canvas_input(event: InputEvent) -> bool:
 
 		if paint_tool == PaintTool.PICK and event.button_index == MOUSE_BUTTON_LEFT:
 			_pick_at_mouse()
-			pick_button.button_pressed = false
-			paint_tool = _prev_tool
+			var prev := _prev_tool
+			_select_tool_button(prev)
 			return true
 
 		mouse_down = true
@@ -622,7 +629,7 @@ func canvas_draw(overlay: Control) -> void:
 		return
 
 	if not mouse_down:
-		if paint_tool == PaintTool.PICK or erase_button.button_pressed:
+		if paint_tool == PaintTool.PICK or paint_tool == PaintTool.ERASE:
 			var td := tilemap.get_cell_tile_data(mouse_current)
 			if not td or td.terrain_set < 0 or td.terrain < 0:
 				return
@@ -630,7 +637,7 @@ func canvas_draw(overlay: Control) -> void:
 	var color: Color
 	if mouse_down and drag_erasing:
 		color = Color(0.0, 0.0, 0.0, 0.35)
-	elif erase_button.button_pressed or selected_index < 0:
+	elif paint_tool == PaintTool.ERASE or selected_index < 0:
 		color = Color(0.0, 0.0, 0.0, 0.35)
 	else:
 		color = Color(1.0, 1.0, 1.0, 0.35)
