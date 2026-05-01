@@ -91,7 +91,7 @@ func _ready() -> void:
 	move_up_button.icon = get_theme_icon("ArrowUp", "EditorIcons")
 	move_down_button.icon = get_theme_icon("ArrowDown", "EditorIcons")
 	remove_terrain_button.icon = get_theme_icon("Remove", "EditorIcons")
-	quick_mode_button.icon = get_theme_icon("GuiVisibilityVisible", "EditorIcons")
+	quick_mode_button.icon = get_theme_icon("GuiTabMenuHl", "EditorIcons")
 
 	draw_button.pressed.connect(_on_tool_changed.bind(PaintTool.DRAW))
 	line_button.pressed.connect(_on_tool_changed.bind(PaintTool.LINE))
@@ -113,6 +113,7 @@ func _ready() -> void:
 	remove_terrain_button.pressed.connect(_on_remove_terrain)
 
 	draw_button.button_pressed = true
+	_on_quick_mode_toggled()
 	_show_empty(true)
 
 
@@ -178,10 +179,14 @@ func _refresh_terrains() -> void:
 	for i in flattened_terrains.size():
 		_create_terrain_entry(flattened_terrains[i], i)
 
+	if selected_index == -1 and flattened_terrains.size() > 0:
+		selected_index = 0
+
 	if selected_index >= flattened_terrains.size():
 		selected_index = -1
 
 	_update_management_buttons()
+	_update_selection_buttons()
 
 
 func _show_empty(show: bool) -> void:
@@ -234,32 +239,72 @@ func _make_icon(source: TileSetAtlasSource, coord: Vector2i, alt_id: int) -> Dic
 
 
 func _create_terrain_entry(data: Dictionary, index: int) -> void:
-	var btn := Button.new()
-	btn.custom_minimum_size = Vector2(80, 80)
-	btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	btn.toggle_mode = true
-	btn.focus_mode = Control.FOCUS_NONE
-	btn.expand_icon = true
-	btn.flat = true
-	btn.name = "Terrain%d" % index
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(72, 72)
+	panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	panel.mouse_filter = Control.MOUSE_FILTER_PASS
+	var empty_style := StyleBoxFlat.new()
+	empty_style.bg_color = Color(0, 0, 0, 0)
+	empty_style.content_margin_left = 0
+	empty_style.content_margin_right = 0
+	empty_style.content_margin_top = 0
+	empty_style.content_margin_bottom = 0
+	panel.add_theme_stylebox_override("panel", empty_style)
 
+	var inner := VBoxContainer.new()
+	inner.add_theme_constant_override("separation", 0)
+	panel.add_child(inner)
+
+	var tex := TextureRect.new()
+	tex.custom_minimum_size = Vector2(68, 52)
+	tex.size_flags_horizontal = Control.SIZE_FILL
+	tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	tex.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	if data.icon_texture:
-		btn.icon = data.icon_texture
-	btn.tooltip_text = "%s (Set %d, Terrain %d)" % [data.name, data.set, data.idx]
-	btn.self_modulate = Color(data.color, 0.6)
+		tex.texture = data.icon_texture
+	inner.add_child(tex)
 
-	btn.pressed.connect(_on_terrain_selected.bind(index))
-	terrain_grid.add_child(btn)
+	var label := Label.new()
+	label.text = data.name
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 10)
+	inner.add_child(label)
+
+	panel.gui_input.connect(_on_entry_gui_input.bind(panel, index))
+	terrain_grid.add_child(panel)
+
+	if index == selected_index:
+		_update_entry_style(panel, true)
 
 
-func _on_terrain_selected(index: int) -> void:
-	selected_index = index
-	for c in terrain_grid.get_children():
-		var btn := c as Button
-		if not btn:
-			continue
-		btn.button_pressed = (c.get_index() == index)
-	_update_management_buttons()
+func _on_entry_gui_input(event: InputEvent, panel: PanelContainer, index: int) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		selected_index = index
+		_update_selection_buttons()
+
+
+func _update_entry_style(panel: PanelContainer, selected: bool) -> void:
+	if selected:
+		var style := StyleBoxFlat.new()
+		style.bg_color = Color(0, 0, 0, 0)
+		style.border_width_left = 2
+		style.border_width_right = 2
+		style.border_width_top = 2
+		style.border_width_bottom = 2
+		style.border_color = Color(1.0, 1.0, 1.0, 0.8)
+		style.content_margin_left = 0
+		style.content_margin_right = 0
+		style.content_margin_top = 0
+		style.content_margin_bottom = 0
+		panel.add_theme_stylebox_override("panel", style)
+	else:
+		var empty_style := StyleBoxFlat.new()
+		empty_style.bg_color = Color(0, 0, 0, 0)
+		empty_style.content_margin_left = 0
+		empty_style.content_margin_right = 0
+		empty_style.content_margin_top = 0
+		empty_style.content_margin_bottom = 0
+		panel.add_theme_stylebox_override("panel", empty_style)
 
 
 func _update_management_buttons() -> void:
@@ -271,11 +316,11 @@ func _update_management_buttons() -> void:
 
 
 func _on_quick_mode_toggled() -> void:
-	add_terrain_button.visible = not quick_mode_button.button_pressed
-	edit_terrain_button.visible = not quick_mode_button.button_pressed
-	move_up_button.visible = not quick_mode_button.button_pressed
-	move_down_button.visible = not quick_mode_button.button_pressed
-	remove_terrain_button.visible = not quick_mode_button.button_pressed
+	add_terrain_button.visible = quick_mode_button.button_pressed
+	edit_terrain_button.visible = quick_mode_button.button_pressed
+	move_up_button.visible = quick_mode_button.button_pressed
+	move_down_button.visible = quick_mode_button.button_pressed
+	remove_terrain_button.visible = quick_mode_button.button_pressed
 
 
 # ---- SAVE / RESTORE CELL STATE ----
@@ -557,11 +602,10 @@ func _pick_at_mouse() -> void:
 
 func _update_selection_buttons() -> void:
 	for i in terrain_grid.get_child_count():
-		var btn := terrain_grid.get_child(i) as Button
-		if not btn:
+		var panel := terrain_grid.get_child(i) as PanelContainer
+		if not panel:
 			continue
-		var idx = i if i < flattened_terrains.size() else -1
-		btn.button_pressed = (idx == selected_index)
+		_update_entry_style(panel, i == selected_index)
 	_update_management_buttons()
 
 
