@@ -1,12 +1,17 @@
 # EZ Tile Map Editor
 
-A Godot 4.6 plugin that replaces the built-in TileMap bottom panel with a simpler terrain editing UI.
+A Godot 4.6 plugin that makes terrain painting on TileMapLayer nodes intuitive and easy — pick a terrain and paint directly in the viewport, replacing the less user-friendly native TileSet bottom panel workflow.
 
-**Goal:** Make terrain painting on TileMapLayer nodes faster by providing a focused, always-visible bottom panel.
-
-## Source map
-
-- `addons/ez_tile_map_editor/plugin.cfg` — plugin registration
-- `addons/ez_tile_map_editor/ez_tile_map_editor_plugin.gd` — hooks into editor selection, registers bottom panel, overrides built-in TileMap focus via deferred `make_bottom_panel_item_visible()`
-- `addons/ez_tile_map_editor/ez_tile_map_editor_panel.tscn` + `.gd` — the bottom panel UI (empty placeholder, `current_tilemap` property wired)
-- `addons/ez_tile_map_editor/ez_tile_map_editor_runtime.gd` — stub for eventual runtime terrain editing
+Plugin entry: `addons/ez_tile_map_editor/plugin.cfg`
+Editor plugin: `addons/ez_tile_map_editor/ez_tile_map_editor_plugin.gd`
+Panel UI: `addons/ez_tile_map_editor/ez_tile_map_editor_panel.tscn`
+Panel logic: `addons/ez_tile_map_editor/ez_tile_map_editor_panel.gd`
+Runtime stub: `addons/ez_tile_map_editor/ez_tile_map_editor_runtime.gd`
+Project config: `project.godot`
+Demo scene: `main.tscn`
+TileSet resource: `tileset.tres`
+TileSet resource: `tiles/tileset.tres`
+Tile atlas (source 0): `tiles/ground.png`
+Tile atlas (source 1): `tiles/stone.png`
+Project icon: `icon.svg`
+MCP server: `.mcp.json`
