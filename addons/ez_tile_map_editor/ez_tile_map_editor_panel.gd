@@ -282,22 +282,22 @@ func _save_cells(coords: Array) -> Dictionary:
 	var state := {}
 	for c in coords:
 		var src := tilemap.get_cell_source_id(c)
-		if src != -1:
-			state[c] = {
-				source_id = src,
-				atlas_coords = tilemap.get_cell_atlas_coords(c),
-				alternative_tile = tilemap.get_cell_alternative_tile(c)
-			}
+		state[c] = {
+			has_cell = src != -1,
+			source_id = src if src != -1 else 0,
+			atlas_coords = tilemap.get_cell_atlas_coords(c) if src != -1 else Vector2i.ZERO,
+			alternative_tile = tilemap.get_cell_alternative_tile(c) if src != -1 else 0
+		}
 	return state
 
 
 func _restore_cells(saved: Dictionary, tm: TileMapLayer) -> void:
-	for c in tm.get_used_cells():
-		if not c in saved:
-			tm.erase_cell(c)
 	for c in saved:
 		var s: Dictionary = saved[c]
-		tm.set_cell(c, s.source_id, s.atlas_coords, s.alternative_tile)
+		if s.has_cell:
+			tm.set_cell(c, s.source_id, s.atlas_coords, s.alternative_tile)
+		else:
+			tm.erase_cell(c)
 
 
 # ---- CANVAS INPUT ----
