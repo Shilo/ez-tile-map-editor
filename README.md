@@ -8,7 +8,7 @@ A Godot 4.6 editor plugin that makes terrain painting on TileMapLayer nodes intu
 - **Pick** terrain from existing cells (Ctrl+Click or Pick tool)
 - **Erase** individual cells or erase entire layers
 - **Right-click drag** to erase while painting
-- Terrain management: **Add**, **Edit**, **Rename**, **Recolor**, **Reorder**, and **Remove** terrains right from the panel
+- Terrain management: Add, rename, recolor, and remove terrains via the built-in TileSet bottom panel
 - **Layer switcher** — select between visible TileMapLayer nodes in the scene
 - **Layer highlight** and **grid visibility** toggles
 - Full **undo/redo** support for all paint and terrain operations
