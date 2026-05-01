@@ -476,8 +476,10 @@ func _expand_cells(cells: Array[Vector2i]) -> Array:
 	var all := {}
 	for c in cells:
 		all[c] = true
-		for peering in range(16):
-			all[tilemap.get_neighbor_cell(c, peering)] = true
+		for peering in [0, 3, 4, 7, 8, 11, 12, 15]:
+			var nb := tilemap.get_neighbor_cell(c, peering)
+			if nb != c:
+				all[nb] = true
 	return all.keys()
 
 
