@@ -91,43 +91,6 @@ flat = true
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="AddTerrain" type="Button" parent="VBoxContainer/Toolbar"]
-unique_name_in_owner = true
-layout_mode = 2
-tooltip_text = "Add terrain"
-flat = true
-
-[node name="EditTerrain" type="Button" parent="VBoxContainer/Toolbar"]
-unique_name_in_owner = true
-layout_mode = 2
-tooltip_text = "Edit selected terrain"
-flat = true
-
-[node name="MoveUp" type="Button" parent="VBoxContainer/Toolbar"]
-unique_name_in_owner = true
-layout_mode = 2
-tooltip_text = "Move selected terrain up"
-flat = true
-
-[node name="MoveDown" type="Button" parent="VBoxContainer/Toolbar"]
-unique_name_in_owner = true
-layout_mode = 2
-tooltip_text = "Move selected terrain down"
-flat = true
-
-[node name="RemoveTerrain" type="Button" parent="VBoxContainer/Toolbar"]
-unique_name_in_owner = true
-layout_mode = 2
-tooltip_text = "Remove selected terrain"
-flat = true
-
-[node name="QuickMode" type="Button" parent="VBoxContainer/Toolbar"]
-unique_name_in_owner = true
-layout_mode = 2
-tooltip_text = "Toggle terrain options"
-toggle_mode = true
-flat = true
-
 [node name="LayerHighlight" type="Button" parent="VBoxContainer/Toolbar"]
 unique_name_in_owner = true
 layout_mode = 2
