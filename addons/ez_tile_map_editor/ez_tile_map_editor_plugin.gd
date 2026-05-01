@@ -12,8 +12,18 @@ var _panel: Control
 var _button: Button
 
 
+const DEFAULT_INPUT_BINDINGS := {
+	"ez_tile_draw": KEY_D,
+	"ez_tile_line": KEY_L,
+	"ez_tile_rect": KEY_R,
+	"ez_tile_fill": KEY_B,
+	"ez_tile_pick": KEY_P,
+	"ez_tile_erase": KEY_E,
+}
+
 func _enter_tree() -> void:
 	_log("_enter_tree")
+	_setup_input_actions()
 	_panel = preload("res://addons/ez_tile_map_editor/ez_tile_map_editor_panel.tscn").instantiate()
 	_button = add_control_to_bottom_panel(_panel, "EZ TileMap")
 	_button.visible = false
@@ -36,11 +46,29 @@ func _enter_tree() -> void:
 
 func _exit_tree() -> void:
 	_log("_exit_tree")
+	_teardown_input_actions()
 	if _panel:
 		remove_control_from_bottom_panel(_panel)
 		_panel.queue_free()
 		_panel = null
 	_button = null
+
+
+func _setup_input_actions() -> void:
+	for action in DEFAULT_INPUT_BINDINGS:
+		if not InputMap.has_action(action):
+			InputMap.add_action(action)
+			var ev := InputEventKey.new()
+			ev.keycode = DEFAULT_INPUT_BINDINGS[action]
+			InputMap.action_add_event(action, ev)
+			_log("  added input action: %s" % action)
+
+
+func _teardown_input_actions() -> void:
+	for action in DEFAULT_INPUT_BINDINGS:
+		if InputMap.has_action(action):
+			InputMap.erase_action(action)
+			_log("  removed input action: %s" % action)
 
 
 func _handles(object: Object) -> bool:

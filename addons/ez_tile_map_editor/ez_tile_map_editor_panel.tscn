@@ -4,47 +4,41 @@
 
 [sub_resource type="ButtonGroup" id="draw_group"]
 
-[sub_resource type="Shortcut" id="shortcut_draw"]
-events = [SubResource("input_key_d")]
+[sub_resource type="InputEventAction" id="action_draw"]
+action = &"ez_tile_draw"
 
-[sub_resource type="InputEventKey" id="input_key_d"]
-keycode = KEY_D
-command_or_control_autoremap = false
+[sub_resource type="Shortcut" id="shortcut_draw"]
+events = [SubResource("action_draw")]
+
+[sub_resource type="InputEventAction" id="action_line"]
+action = &"ez_tile_line"
 
 [sub_resource type="Shortcut" id="shortcut_line"]
-events = [SubResource("input_key_l")]
+events = [SubResource("action_line")]
 
-[sub_resource type="InputEventKey" id="input_key_l"]
-keycode = KEY_L
-command_or_control_autoremap = false
+[sub_resource type="InputEventAction" id="action_rect"]
+action = &"ez_tile_rect"
 
 [sub_resource type="Shortcut" id="shortcut_rect"]
-events = [SubResource("input_key_r")]
+events = [SubResource("action_rect")]
 
-[sub_resource type="InputEventKey" id="input_key_r"]
-keycode = KEY_R
-command_or_control_autoremap = false
+[sub_resource type="InputEventAction" id="action_fill"]
+action = &"ez_tile_fill"
 
 [sub_resource type="Shortcut" id="shortcut_fill"]
-events = [SubResource("input_key_b")]
+events = [SubResource("action_fill")]
 
-[sub_resource type="InputEventKey" id="input_key_b"]
-keycode = KEY_B
-command_or_control_autoremap = false
+[sub_resource type="InputEventAction" id="action_pick"]
+action = &"ez_tile_pick"
 
 [sub_resource type="Shortcut" id="shortcut_pick"]
-events = [SubResource("input_key_p")]
+events = [SubResource("action_pick")]
 
-[sub_resource type="InputEventKey" id="input_key_p"]
-keycode = KEY_P
-command_or_control_autoremap = false
+[sub_resource type="InputEventAction" id="action_erase"]
+action = &"ez_tile_erase"
 
 [sub_resource type="Shortcut" id="shortcut_erase"]
-events = [SubResource("input_key_e")]
-
-[sub_resource type="InputEventKey" id="input_key_e"]
-keycode = KEY_E
-command_or_control_autoremap = false
+events = [SubResource("action_erase")]
 
 [node name="EZTileMapEditorPanel" type="Control"]
 custom_minimum_size = Vector2(0, 120)

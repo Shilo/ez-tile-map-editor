@@ -387,9 +387,7 @@ func _on_layer_highlight_toggled(toggled: bool) -> void:
 	var settings := EditorInterface.get_editor_settings()
 	settings.set_setting("editors/tiles_editor/highlight_selected_layer", toggled)
 	settings.emit_changed()
-	_log("  emitted changed, emitting update_overlay + viewport redraw")
 	update_overlay.emit()
-	EditorInterface.get_editor_viewport_2d().queue_redraw()
 
 
 func _on_layer_grid_toggled(toggled: bool) -> void:
@@ -397,9 +395,7 @@ func _on_layer_grid_toggled(toggled: bool) -> void:
 	var settings := EditorInterface.get_editor_settings()
 	settings.set_setting("editors/tiles_editor/display_grid", toggled)
 	settings.emit_changed()
-	_log("  emitted changed, emitting update_overlay + viewport redraw")
 	update_overlay.emit()
-	EditorInterface.get_editor_viewport_2d().queue_redraw()
 
 
 func about_to_be_visible() -> void:
@@ -694,15 +690,7 @@ func _pick_at_mouse() -> bool:
 # ---- CANVAS OVERLAY ----
 
 func canvas_draw(overlay: Control) -> void:
-	if not _is_tilemap_editable() or not tileset:
-		return
-
-	var settings := EditorInterface.get_editor_settings()
-	if settings.get_setting("editors/tiles_editor/display_grid"):
-		_draw_grid_overlay(overlay)
-	if settings.get_setting("editors/tiles_editor/highlight_selected_layer"):
-		_draw_highlight_overlay(overlay)
-	if not draw_overlay:
+	if not draw_overlay or not _is_tilemap_editable():
 		return
 	if not mouse_down:
 		if paint_tool == PaintTool.PICK or paint_tool == PaintTool.ERASE:
@@ -732,42 +720,6 @@ func canvas_draw(overlay: Control) -> void:
 	for c in cells:
 		var cell_transform := Transform2D(0.0, cell_size, 0.0, tilemap.map_to_local(c))
 		overlay.draw_colored_polygon(transform * cell_transform * polygon, color)
-
-
-func _draw_grid_overlay(overlay: Control) -> void:
-	var cell_size := tileset.tile_size
-	var tform := _canvas_tilemap_transform()
-	var inv := tform.affine_inverse()
-	var viewport := EditorInterface.get_editor_viewport_2d()
-	var vp_rect := viewport.get_visible_rect()
-	var top_left_local := inv * vp_rect.position
-	var bottom_right_local := inv * vp_rect.end
-	var top_left_tile := tilemap.local_to_map(top_left_local)
-	var bottom_right_tile := tilemap.local_to_map(bottom_right_local)
-	var grid_color := Color(1.0, 1.0, 1.0, 0.1)
-	var axis_color := Color(1.0, 1.0, 1.0, 0.2)
-	for x in range(top_left_tile.x, bottom_right_tile.x + 2):
-		var line_x := tilemap.map_to_local(Vector2i(x, 0)).x - cell_size.x / 2.0
-		var top_y := tilemap.map_to_local(Vector2i(0, top_left_tile.y)).y - cell_size.y / 2.0
-		var bottom_y := tilemap.map_to_local(Vector2i(0, bottom_right_tile.y + 1)).y + cell_size.y / 2.0
-		overlay.draw_line(tform * Vector2(line_x, top_y), tform * Vector2(line_x, bottom_y), axis_color if x == 0 else grid_color, 1.0, true)
-	for y in range(top_left_tile.y, bottom_right_tile.y + 2):
-		var line_y := tilemap.map_to_local(Vector2i(0, y)).y - cell_size.y / 2.0
-		var left_x := tilemap.map_to_local(Vector2i(top_left_tile.x, 0)).x - cell_size.x / 2.0
-		var right_x := tilemap.map_to_local(Vector2i(bottom_right_tile.x + 1, 0)).x + cell_size.x / 2.0
-		overlay.draw_line(tform * Vector2(left_x, line_y), tform * Vector2(right_x, line_y), axis_color if y == 0 else grid_color, 1.0, true)
-
-
-func _draw_highlight_overlay(overlay: Control) -> void:
-	var tform := _canvas_tilemap_transform()
-	var cell_size := tileset.tile_size
-	var highlight_color := Color(1.0, 0.92, 0.0, 0.2)
-	var used := tilemap.get_used_cells()
-	const HALF := 0.5
-	var polygon := PackedVector2Array([Vector2(-HALF, -HALF), Vector2(HALF, -HALF), Vector2(HALF, HALF), Vector2(-HALF, HALF)])
-	for c in used:
-		var cell_transform := Transform2D(0.0, cell_size, 0.0, tilemap.map_to_local(c))
-		overlay.draw_colored_polygon(tform * cell_transform * polygon, highlight_color)
 
 
 func _canvas_tilemap_transform() -> Transform2D:
