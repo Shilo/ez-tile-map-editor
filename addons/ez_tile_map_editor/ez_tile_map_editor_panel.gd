@@ -321,7 +321,7 @@ func canvas_input(event: InputEvent) -> bool:
 	if event is InputEventMouseMotion:
 		if mouse_current == mouse_prev:
 			return false
-		if paint_tool == PaintTool.BUCKET and not mouse_down:
+		if not mouse_down:
 			draw_overlay = true
 			update_overlay.emit()
 		elif mouse_down:
@@ -575,22 +575,23 @@ func canvas_draw(overlay: Control) -> void:
 	if not draw_overlay or not tilemap:
 		return
 
-	var is_bucket_preview := paint_tool == PaintTool.BUCKET and not mouse_down
-	if not is_bucket_preview and not mouse_down:
-		return
+	if not mouse_down:
+		if paint_tool == PaintTool.PICK or erase_button.button_pressed:
+			var td := tilemap.get_cell_tile_data(mouse_current)
+			if not td or td.terrain_set < 0 or td.terrain < 0:
+				return
 
 	var color: Color
-	if drag_erasing or selected_index < 0 or erase_button.button_pressed:
+	if paint_tool == PaintTool.ERASE or drag_erasing or selected_index < 0 or erase_button.button_pressed:
 		color = Color(0.0, 0.0, 0.0, 0.35)
 	else:
 		color = Color(1.0, 1.0, 1.0, 0.35)
 
 	var cells: Array
-	if is_bucket_preview:
+	if paint_tool == PaintTool.BUCKET and not mouse_down:
 		cells = _flood_fill(mouse_current)
-	else:
+	elif mouse_down:
 		cells = _get_brush_cells()
-
 	if cells.is_empty():
 		cells = [mouse_current]
 
