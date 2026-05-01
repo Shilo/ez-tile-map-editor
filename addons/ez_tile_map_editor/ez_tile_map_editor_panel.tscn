@@ -1,8 +1,50 @@
-[gd_scene load_steps=2 format=3 uid="uid://cez_tile_map_editor_panel"]
+[gd_scene load_steps=14 format=3 uid="uid://cez_tile_map_editor_panel"]
 
 [ext_resource type="Script" path="res://addons/ez_tile_map_editor/ez_tile_map_editor_panel.gd" id="1_panel"]
 
 [sub_resource type="ButtonGroup" id="draw_group"]
+
+[sub_resource type="Shortcut" id="shortcut_draw"]
+events = [SubResource("input_key_d")]
+
+[sub_resource type="InputEventKey" id="input_key_d"]
+keycode = KEY_D
+command_or_control_autoremap = false
+
+[sub_resource type="Shortcut" id="shortcut_line"]
+events = [SubResource("input_key_l")]
+
+[sub_resource type="InputEventKey" id="input_key_l"]
+keycode = KEY_L
+command_or_control_autoremap = false
+
+[sub_resource type="Shortcut" id="shortcut_rect"]
+events = [SubResource("input_key_r")]
+
+[sub_resource type="InputEventKey" id="input_key_r"]
+keycode = KEY_R
+command_or_control_autoremap = false
+
+[sub_resource type="Shortcut" id="shortcut_fill"]
+events = [SubResource("input_key_b")]
+
+[sub_resource type="InputEventKey" id="input_key_b"]
+keycode = KEY_B
+command_or_control_autoremap = false
+
+[sub_resource type="Shortcut" id="shortcut_pick"]
+events = [SubResource("input_key_p")]
+
+[sub_resource type="InputEventKey" id="input_key_p"]
+keycode = KEY_P
+command_or_control_autoremap = false
+
+[sub_resource type="Shortcut" id="shortcut_erase"]
+events = [SubResource("input_key_e")]
+
+[sub_resource type="InputEventKey" id="input_key_e"]
+keycode = KEY_E
+command_or_control_autoremap = false
 
 [node name="EZTileMapEditorPanel" type="Control"]
 custom_minimum_size = Vector2(0, 120)
@@ -30,51 +72,57 @@ layout_mode = 2
 [node name="Draw" type="Button" parent="VBoxContainer/Toolbar"]
 unique_name_in_owner = true
 layout_mode = 2
-tooltip_text = "Draw terrain
+tooltip_text = "Draw terrain (D)
 Shift: Draw line
 Ctrl+Shift: Draw rectangle"
 toggle_mode = true
 button_pressed = true
+shortcut = SubResource("shortcut_draw")
 button_group = SubResource("draw_group")
 flat = true
 
 [node name="Line" type="Button" parent="VBoxContainer/Toolbar"]
 unique_name_in_owner = true
 layout_mode = 2
-tooltip_text = "Draw line"
+tooltip_text = "Draw line (L)"
 toggle_mode = true
+shortcut = SubResource("shortcut_line")
 button_group = SubResource("draw_group")
 flat = true
 
 [node name="Rect" type="Button" parent="VBoxContainer/Toolbar"]
 unique_name_in_owner = true
 layout_mode = 2
-tooltip_text = "Draw rectangle"
+tooltip_text = "Draw rectangle (R)"
 toggle_mode = true
+shortcut = SubResource("shortcut_rect")
 button_group = SubResource("draw_group")
 flat = true
 
 [node name="Fill" type="Button" parent="VBoxContainer/Toolbar"]
 unique_name_in_owner = true
 layout_mode = 2
-tooltip_text = "Bucket fill terrain"
+tooltip_text = "Bucket fill terrain (B)"
 toggle_mode = true
+shortcut = SubResource("shortcut_fill")
 button_group = SubResource("draw_group")
 flat = true
 
 [node name="Pick" type="Button" parent="VBoxContainer/Toolbar"]
 unique_name_in_owner = true
 layout_mode = 2
-tooltip_text = "Pick terrain (Ctrl+Click)"
+tooltip_text = "Pick terrain (P / Ctrl+Click)"
 toggle_mode = true
+shortcut = SubResource("shortcut_pick")
 button_group = SubResource("draw_group")
 flat = true
 
 [node name="Erase" type="Button" parent="VBoxContainer/Toolbar"]
 unique_name_in_owner = true
 layout_mode = 2
-tooltip_text = "Erase terrain"
+tooltip_text = "Erase terrain (E)"
 toggle_mode = true
+shortcut = SubResource("shortcut_erase")
 button_group = SubResource("draw_group")
 flat = true
 
