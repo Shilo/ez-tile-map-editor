@@ -25,6 +25,7 @@ enum PaintTool { NONE, DRAW, LINE, RECT, BUCKET, PICK, ERASE }
 @onready var options_button: Button = %QuickMode
 
 @onready var terrain_grid: HFlowContainer = %TerrainGrid
+@onready var scroll_container: ScrollContainer = %TerrainScroll
 @onready var empty_label: Label = %EmptyLabel
 
 var tilemap: TileMapLayer = null:
@@ -164,6 +165,7 @@ func _refresh_terrains() -> void:
 
 func _show_empty(show: bool) -> void:
 	empty_label.visible = show
+	scroll_container.visible = not show
 
 
 func _build_icon_cache() -> void:
@@ -204,24 +206,20 @@ func _make_icon(source: TileSetAtlasSource, coord: Vector2i) -> Dictionary:
 
 
 func _create_terrain_entry(data: Dictionary, index: int) -> void:
-	var btn := Button.new()
-	btn.custom_minimum_size = Vector2(72, 72)
-	btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	btn.toggle_mode = true
-	btn.focus_mode = Control.FOCUS_NONE
-	btn.flat = true
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(72, 72)
+	panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	panel.mouse_filter = Control.MOUSE_FILTER_PASS
 
 	var inner := VBoxContainer.new()
 	inner.add_theme_constant_override("separation", 0)
-	inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	btn.add_child(inner)
+	panel.add_child(inner)
 
 	var tex := TextureRect.new()
 	tex.custom_minimum_size = Vector2(68, 52)
 	tex.size_flags_horizontal = Control.SIZE_FILL
 	tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	tex.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-	tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if data.icon_texture:
 		tex.texture = data.icon_texture
 	inner.add_child(tex)
@@ -230,32 +228,51 @@ func _create_terrain_entry(data: Dictionary, index: int) -> void:
 	label.text = data.name
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.add_theme_font_size_override("font_size", 10)
-	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	inner.add_child(label)
 
-	btn.tooltip_text = "%s (Set %d, Terrain %d)" % [data.name, data.set, data.idx]
-	btn.pressed.connect(_on_terrain_selected.bind(index))
-	terrain_grid.add_child(btn)
+	panel.gui_input.connect(_on_entry_gui_input.bind(panel, index))
+	terrain_grid.add_child(panel)
+
 	if index == selected_index:
-		btn.button_pressed = true
+		_update_entry_style(panel, true)
 
 
-func _on_terrain_selected(index: int) -> void:
-	selected_index = index
-	for c in terrain_grid.get_children():
-		var btn := c as Button
-		if not btn:
-			continue
-		btn.button_pressed = (c.get_index() == index)
-	_update_management_buttons()
+func _on_entry_gui_input(event: InputEvent, panel: PanelContainer, index: int) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		selected_index = index
+		_update_selection_buttons()
+
+
+func _update_entry_style(panel: PanelContainer, selected: bool) -> void:
+	if selected:
+		var style := StyleBoxFlat.new()
+		style.bg_color = Color(0, 0, 0, 0)
+		style.border_width_left = 2
+		style.border_width_right = 2
+		style.border_width_top = 2
+		style.border_width_bottom = 2
+		style.border_color = Color(1.0, 1.0, 1.0, 0.8)
+		style.content_margin_left = 0
+		style.content_margin_right = 0
+		style.content_margin_top = 0
+		style.content_margin_bottom = 0
+		panel.add_theme_stylebox_override("panel", style)
+	else:
+		var empty_style := StyleBoxFlat.new()
+		empty_style.bg_color = Color(0, 0, 0, 0)
+		empty_style.content_margin_left = 0
+		empty_style.content_margin_right = 0
+		empty_style.content_margin_top = 0
+		empty_style.content_margin_bottom = 0
+		panel.add_theme_stylebox_override("panel", empty_style)
 
 
 func _update_selection_buttons() -> void:
 	for i in terrain_grid.get_child_count():
-		var btn := terrain_grid.get_child(i) as Button
-		if not btn:
+		var panel := terrain_grid.get_child(i) as PanelContainer
+		if not panel:
 			continue
-		btn.button_pressed = (i == selected_index)
+		_update_entry_style(panel, i == selected_index)
 	_update_management_buttons()
 
 

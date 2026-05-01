@@ -158,7 +158,13 @@ horizontal_alignment = 1
 vertical_alignment = 1
 autowrap_mode = 3
 
-[node name="TerrainGrid" type="HFlowContainer" parent="VBoxContainer"]
+[node name="TerrainScroll" type="ScrollContainer" parent="VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 3
+
+[node name="TerrainGrid" type="HFlowContainer" parent="VBoxContainer/TerrainScroll"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
