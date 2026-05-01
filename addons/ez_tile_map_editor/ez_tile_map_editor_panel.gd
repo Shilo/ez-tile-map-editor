@@ -203,58 +203,18 @@ func _build_icon_cache() -> void:
 			for alt_i in source.get_alternative_tiles_count(coord):
 				var alt_id := source.get_alternative_tile_id(coord, alt_i)
 				var td: TileData = source.get_tile_data(coord, alt_id)
-				_cache_terrain_icon(td, source, coord, alt_id)
-
-
-const _VALID_PEERING_BITS := {
-	TileSet.TILE_SHAPE_SQUARE: {
-		TileSet.TERRAIN_MODE_MATCH_CORNERS_AND_SIDES: [0, 3, 4, 7, 8, 11, 12, 15],
-		TileSet.TERRAIN_MODE_MATCH_CORNERS: [3, 7, 11, 15],
-		TileSet.TERRAIN_MODE_MATCH_SIDES: [0, 4, 8, 12],
-	},
-	TileSet.TILE_SHAPE_ISOMETRIC: {
-		TileSet.TERRAIN_MODE_MATCH_CORNERS_AND_SIDES: [1, 2, 5, 6, 9, 10, 13, 14],
-		TileSet.TERRAIN_MODE_MATCH_CORNERS: [1, 5, 9, 13],
-		TileSet.TERRAIN_MODE_MATCH_SIDES: [2, 6, 10, 14],
-	},
-	TileSet.TILE_SHAPE_HALF_OFFSET_SQUARE: {
-		TileSet.TERRAIN_MODE_MATCH_CORNERS_AND_SIDES: [0, 2, 6, 8, 10, 14],
-		TileSet.TERRAIN_MODE_MATCH_CORNERS: [3, 5, 7, 11, 13, 15],
-		TileSet.TERRAIN_MODE_MATCH_SIDES: [0, 2, 6, 8, 10, 14],
-	},
-	TileSet.TILE_SHAPE_HEXAGON: {
-		TileSet.TERRAIN_MODE_MATCH_CORNERS_AND_SIDES: [2, 4, 6, 10, 12, 14],
-		TileSet.TERRAIN_MODE_MATCH_CORNERS: [1, 3, 7, 9, 11, 15],
-		TileSet.TERRAIN_MODE_MATCH_SIDES: [2, 4, 6, 10, 12, 14],
-	},
-}
-
-
-func _valid_peering_bits_for_set(set_idx: int) -> Array:
-	if not tileset or set_idx < 0:
-		return []
-	var shape := tileset.tile_shape
-	var mode := tileset.get_terrain_set_mode(set_idx)
-	if shape in _VALID_PEERING_BITS:
-		var modes: Dictionary = _VALID_PEERING_BITS[shape]
-		if mode in modes:
-			return modes[mode]
-	return [0, 3, 4, 7, 8, 11, 12, 15]
+				if td and td.terrain_set >= 0:
+					_cache_terrain_icon(td, source, coord, alt_id)
 
 
 func _cache_terrain_icon(td: TileData, source: TileSetAtlasSource, coord: Vector2i, alt_id: int) -> void:
 	var set_idx := td.terrain_set
 	if set_idx < 0:
 		return
-	var key_center := "%d:%d" % [set_idx, td.terrain]
-	if td.terrain >= 0 and not _icon_cache.has(key_center):
-		_icon_cache[key_center] = _make_icon(source, coord, alt_id)
-	for peering in _valid_peering_bits_for_set(set_idx):
-		var ter := td.get_terrain_peering_bit(peering)
-		if ter >= 0:
-			var key_peer := "%d:%d" % [set_idx, ter]
-			if not _icon_cache.has(key_peer):
-				_icon_cache[key_peer] = _make_icon(source, coord, alt_id)
+	if td.terrain >= 0:
+		var key_center := "%d:%d" % [set_idx, td.terrain]
+		if not _icon_cache.has(key_center) and source.texture:
+			_icon_cache[key_center] = _make_icon(source, coord, alt_id)
 
 
 func _discover_terrain_icon(set_idx: int, ter_idx: int) -> Dictionary:
