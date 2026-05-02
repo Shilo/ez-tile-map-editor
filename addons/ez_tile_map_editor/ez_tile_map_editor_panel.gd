@@ -175,6 +175,7 @@ func _on_tool_changed(tool: PaintTool) -> void:
 		_selection.clear()
 	mouse_down = false
 	draw_overlay = false
+	update_overlay.emit()
 	paint_tool = tool
 	selection_rect = Rect2i()
 	_ensure_editor_select_mode()
@@ -1103,15 +1104,10 @@ func _find_first_toggle_in(node: Node) -> BaseButton:
 	var mode_names := ["Select Mode", "Select"]
 	for child in node.get_children():
 		if child is HBoxContainer:
-			var first_toggle: BaseButton = null
 			for btn in child.get_children():
 				if btn is BaseButton and btn.toggle_mode:
 					if btn.tooltip_text in mode_names:
 						return btn
-					if not first_toggle:
-						first_toggle = btn
-			if first_toggle:
-				return first_toggle
 		var found := _find_first_toggle_in(child)
 		if found:
 			return found
@@ -1161,7 +1157,7 @@ func _draw_move_preview(offset: Vector2i, overlay: Control) -> void:
 		var new_cell: Vector2i = c + offset
 		var source := tileset.get_source(dc.source_id) as TileSetAtlasSource
 		if source and source.texture:
-			var region := source.get_tile_texture_region(dc.atlas_coords, dc.alternative_tile)
+			var region := source.get_tile_texture_region(dc.atlas_coords, 0)
 			var center := tilemap.map_to_local(new_cell)
 			var dest_top_left := tform * (center - half)
 			var dest_bottom_right := tform * (center + half)
@@ -1191,7 +1187,7 @@ func _start_move(mouse_pos: Vector2i) -> void:
 		var src := tilemap.get_cell_source_id(c)
 		_drag_modified[c] = {
 			"has_cell": src != -1,
-			"source_id": src,
+			"source_id": src if src != -1 else 0,
 			"atlas_coords": tilemap.get_cell_atlas_coords(c) if src != -1 else Vector2i.ZERO,
 			"alternative_tile": tilemap.get_cell_alternative_tile(c) if src != -1 else 0,
 		}
@@ -1237,7 +1233,8 @@ func _commit_move() -> void:
 		var dc: Dictionary = _drag_modified[c]
 		if dc.has_cell:
 			var new_cell: Vector2i = c + offset
-			undo_manager.add_do_method(tilemap, "set_cell", new_cell, dc.source_id, dc.atlas_coords, dc.alternative_tile)
+			if tileset.has_source(dc.source_id):
+				undo_manager.add_do_method(tilemap, "set_cell", new_cell, dc.source_id, dc.atlas_coords, dc.alternative_tile)
 	undo_manager.add_do_method(self, "_set_selection", new_selection)
 
 	# UNDO: restore in reverse — selection, then what was at new positions, then clear new, then restore old
@@ -1340,19 +1337,31 @@ func _do_paste() -> void:
 		return
 	if _drag_type != DragType.NONE:
 		return
+	if not _validate_clipboard_tileset():
+		return
 	_drag_type = DragType.CLIPBOARD_PASTE
 	update_overlay.emit()
+
+func _validate_clipboard_tileset() -> bool:
+	if not _clipboard or _clipboard.is_empty():
+		return false
+	for coord in _clipboard.get_used_cells():
+		var src_id := _clipboard.get_cell_source_id(coord)
+		if src_id != -1 and not tileset.has_source(src_id):
+			return false
+	return true
+
+func _get_paste_origin(pattern: TileMapPattern, mouse_cell: Vector2i) -> Vector2i:
+	var pattern_size := pattern.get_size()
+	var center_offset := (Vector2(pattern_size) / 2.0 - Vector2(0.5, 0.5)) * Vector2(tileset.tile_size)
+	return tilemap.local_to_map(tilemap.map_to_local(mouse_cell) - center_offset)
 
 func _commit_paste() -> void:
 	if not _clipboard or _clipboard.is_empty() or not undo_manager:
 		_drag_type = DragType.NONE
 		return
 
-	var pattern_size := _clipboard.get_size()
-	var cell_size := tileset.tile_size
-	var center_offset := (Vector2(pattern_size) / 2.0 - Vector2(0.5, 0.5)) * Vector2(cell_size)
-	var mouse_local: Vector2 = tilemap.map_to_local(mouse_current)
-	var pattern_pos := tilemap.local_to_map(mouse_local - center_offset)
+	var pattern_pos := _get_paste_origin(_clipboard, mouse_current)
 
 	var used_cells := _clipboard.get_used_cells()
 	var saved := {}
@@ -1385,10 +1394,7 @@ func _draw_paste_preview(overlay: Control) -> void:
 	var half := Vector2(cell_size) / 2.0
 	var polygon := PackedVector2Array([Vector2(-0.5, -0.5), Vector2(0.5, -0.5), Vector2(0.5, 0.5), Vector2(-0.5, 0.5)])
 
-	var pattern_size := _clipboard.get_size()
-	var center_offset := (Vector2(pattern_size) / 2.0 - Vector2(0.5, 0.5)) * Vector2(cell_size)
-	var mouse_local: Vector2 = tilemap.map_to_local(mouse_current)
-	var pattern_pos := tilemap.local_to_map(mouse_local - center_offset)
+	var pattern_pos := _get_paste_origin(_clipboard, mouse_current)
 
 	for coord in _clipboard.get_used_cells():
 		var world_cell: Vector2i = pattern_pos + coord
@@ -1396,8 +1402,7 @@ func _draw_paste_preview(overlay: Control) -> void:
 		var source := tileset.get_source(source_id) as TileSetAtlasSource
 		if source and source.texture:
 			var atlas_coords := _clipboard.get_cell_atlas_coords(coord)
-			var alt := _clipboard.get_cell_alternative_tile(coord)
-			var region := source.get_tile_texture_region(atlas_coords, alt)
+			var region := source.get_tile_texture_region(atlas_coords, 0)
 			var center := tilemap.map_to_local(world_cell)
 			var top_left := tform * (center - half)
 			var bottom_right := tform * (center + half)
