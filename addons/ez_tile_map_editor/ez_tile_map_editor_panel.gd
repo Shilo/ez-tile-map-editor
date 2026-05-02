@@ -660,12 +660,6 @@ func canvas_input(event: InputEvent) -> bool:
 				update_overlay.emit()
 			return true
 		if event.button_index == MOUSE_BUTTON_LEFT and _quick_source_tool != PaintTool.NONE:
-			if paint_tool == PaintTool.PICK:
-				if _held_button_count == 0:
-					mouse_down = false
-					draw_overlay = false
-					update_overlay.emit()
-				return true
 			if mouse_down:
 				if paint_tool == PaintTool.LINE or paint_tool == PaintTool.RECT:
 					_commit_paint_action()
@@ -730,7 +724,7 @@ func canvas_input(event: InputEvent) -> bool:
 			elif event.alt_pressed and not event.shift_pressed and not event.is_command_or_control_pressed():
 				_enter_quick_tool(PaintTool.PICK)
 				_pick_at_mouse()
-				call_deferred("_exit_quick_tool")
+				_exit_quick_tool()
 				return true
 		else:
 			return false
