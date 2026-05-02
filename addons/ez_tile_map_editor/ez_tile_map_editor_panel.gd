@@ -164,7 +164,6 @@ func _on_tilemap_visibility_changed() -> void:
 	_update_empty_state.call_deferred()
 
 func _on_tool_changed(tool: PaintTool) -> void:
-	print("[EZ] _on_tool_changed called: tool=", tool, " current=", paint_tool, " button_count=", _held_button_count)
 	if paint_tool != PaintTool.PICK and paint_tool != PaintTool.SEL:
 		_prev_tool = paint_tool
 	if _drag_type == DragType.MOVE:
