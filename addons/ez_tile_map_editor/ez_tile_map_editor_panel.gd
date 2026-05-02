@@ -571,10 +571,9 @@ func canvas_input(event: InputEvent) -> bool:
 
 	if clicked:
 		if _drag_type == DragType.CLIPBOARD_PASTE:
-			if event.button_index == MOUSE_BUTTON_MIDDLE:
-				return false
 			if event.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]:
 				_commit_paste()
+				return true
 			return false
 
 		if event.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]:
