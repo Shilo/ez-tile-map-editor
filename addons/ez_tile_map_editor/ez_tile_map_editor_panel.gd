@@ -804,7 +804,10 @@ func _pick_at_mouse() -> bool:
 # ---- CANVAS OVERLAY ----
 
 func canvas_draw(overlay: Control) -> void:
-	if not draw_overlay or not _is_tilemap_editable():
+	if not _is_tilemap_editable() or not tileset:
+		return
+	_draw_our_grid(overlay)
+	if not draw_overlay:
 		return
 	if not mouse_down:
 		if paint_tool == PaintTool.PICK or paint_tool == PaintTool.ERASE:
@@ -834,6 +837,126 @@ func canvas_draw(overlay: Control) -> void:
 	for c in cells:
 		var cell_transform := Transform2D(0.0, cell_size, 0.0, tilemap.map_to_local(c))
 		overlay.draw_colored_polygon(transform * cell_transform * polygon, color)
+
+
+func _draw_our_grid(overlay: Control) -> void:
+	var settings := EditorInterface.get_editor_settings()
+	if not settings.get_setting("editors/tiles_editor/display_grid"):
+		return
+
+	var cell_size := tileset.tile_size
+	var tform := _canvas_tilemap_transform()
+	var inv := tform.affine_inverse()
+
+	# Scale fading: hide grid when on-screen tile size < 5 pixels
+	var hint_distance: Vector2 = tform.get_scale() * Vector2(cell_size)
+	var scale_fading := minf(1.0, (minf(absf(hint_distance.x), absf(hint_distance.y)) - 5.0) / 5.0)
+	if scale_fading <= 0.0:
+		return
+
+	# Calculate viewport bounds in tile space
+	var viewport := EditorInterface.get_editor_viewport_2d()
+	var screen_size := viewport.get_visible_rect().size
+	var corners: Array = [
+		inv * Vector2.ZERO,
+		inv * Vector2(screen_size.x, 0),
+		inv * Vector2(screen_size.x, screen_size.y),
+		inv * Vector2(0, screen_size.y),
+	]
+	var screen_rect := Rect2i(tilemap.local_to_map(corners[0]), Vector2i.ZERO)
+	for i: int in range(1, 4):
+		screen_rect = screen_rect.expand(tilemap.local_to_map(corners[i]))
+	screen_rect = screen_rect.grow(1)
+
+	# Intersect with used rect, add fade margin of 5 cells
+	var used_rect := tilemap.get_used_rect()
+	const FADING := 5
+	var intersected := used_rect.intersection(screen_rect)
+	if not intersected.has_area():
+		return
+	var displayed_rect := intersected.grow(FADING)
+	if displayed_rect.size.x <= 0 or displayed_rect.size.y <= 0:
+		return
+
+	# Performance clamp: max 100x100 cells visible
+	const MAX_SIZE := 100
+	if displayed_rect.size.x > MAX_SIZE:
+		var excess := (displayed_rect.size.x - MAX_SIZE) / 2
+		displayed_rect = Rect2i(displayed_rect.position.x + excess, displayed_rect.position.y, MAX_SIZE, displayed_rect.size.y)
+	if displayed_rect.size.y > MAX_SIZE:
+		var excess := (displayed_rect.size.y - MAX_SIZE) / 2
+		displayed_rect = Rect2i(displayed_rect.position.x, displayed_rect.position.y + excess, displayed_rect.size.x, MAX_SIZE)
+
+	# Default native grid color: Color(1.0, 0.5, 0.2, 0.5)
+	var grid_color: Color = settings.get_setting("editors/tiles_editor/grid_color")
+
+	# Square tile shape: draw 4-line outline per cell (matches native renderer)
+	if tileset.tile_shape == TileSet.TILE_SHAPE_SQUARE:
+		for x in range(displayed_rect.position.x, displayed_rect.position.x + displayed_rect.size.x):
+			for y in range(displayed_rect.position.y, displayed_rect.position.y + displayed_rect.size.y):
+				var pos_in_rect := Vector2i(x, y) - displayed_rect.position
+
+				# Fade out at edges: 5-cell gradient
+				var left_opacity := clampf(inverse_lerp(0.0, float(FADING), float(pos_in_rect.x)), 0.0, 1.0)
+				var right_opacity := clampf(inverse_lerp(float(displayed_rect.size.x), float(displayed_rect.size.x - FADING), float(pos_in_rect.x + 1)), 0.0, 1.0)
+				var top_opacity := clampf(inverse_lerp(0.0, float(FADING), float(pos_in_rect.y)), 0.0, 1.0)
+				var bottom_opacity := clampf(inverse_lerp(float(displayed_rect.size.y), float(displayed_rect.size.y - FADING), float(pos_in_rect.y + 1)), 0.0, 1.0)
+				var opacity := clampf(minf(left_opacity, minf(right_opacity, minf(top_opacity, bottom_opacity))) + 0.1, 0.0, 1.0)
+
+				var center := tilemap.map_to_local(Vector2i(x, y))
+				var half := Vector2(cell_size) / 2.0
+				var top_left := tform * (center - half)
+				var top_right := tform * (center + Vector2(half.x, -half.y))
+				var bottom_right := tform * (center + half)
+				var bottom_left := tform * (center + Vector2(-half.x, half.y))
+
+				var color := grid_color
+				color.a *= opacity * scale_fading
+
+				overlay.draw_line(top_left, top_right, color, -1.0, false)
+				overlay.draw_line(top_right, bottom_right, color, -1.0, false)
+				overlay.draw_line(bottom_right, bottom_left, color, -1.0, false)
+				overlay.draw_line(bottom_left, top_left, color, -1.0, false)
+	else:
+		# Non-square shapes: use per-cell polyline outline
+		var polygon: PackedVector2Array = _get_tile_shape_polygon()
+		for x in range(displayed_rect.position.x, displayed_rect.position.x + displayed_rect.size.x):
+			for y in range(displayed_rect.position.y, displayed_rect.position.y + displayed_rect.size.y):
+				var pos_in_rect := Vector2i(x, y) - displayed_rect.position
+				var left_opacity := clampf(inverse_lerp(0.0, float(FADING), float(pos_in_rect.x)), 0.0, 1.0)
+				var right_opacity := clampf(inverse_lerp(float(displayed_rect.size.x), float(displayed_rect.size.x - FADING), float(pos_in_rect.x + 1)), 0.0, 1.0)
+				var top_opacity := clampf(inverse_lerp(0.0, float(FADING), float(pos_in_rect.y)), 0.0, 1.0)
+				var bottom_opacity := clampf(inverse_lerp(float(displayed_rect.size.y), float(displayed_rect.size.y - FADING), float(pos_in_rect.y + 1)), 0.0, 1.0)
+				var opacity := clampf(minf(left_opacity, minf(right_opacity, minf(top_opacity, bottom_opacity))) + 0.1, 0.0, 1.0)
+
+				var tile_xform := Transform2D(0.0, cell_size, 0.0, tilemap.map_to_local(Vector2i(x, y)))
+				var world_polygon := tform * tile_xform * polygon
+				var color := grid_color
+				color.a *= opacity * scale_fading
+				overlay.draw_polyline(world_polygon, color, -1.0, false)
+
+
+func _get_tile_shape_polygon() -> PackedVector2Array:
+	match tileset.tile_shape:
+		TileSet.TILE_SHAPE_SQUARE:
+			return PackedVector2Array([Vector2(-0.5, -0.5), Vector2(0.5, -0.5), Vector2(0.5, 0.5), Vector2(-0.5, 0.5), Vector2(-0.5, -0.5)])
+		TileSet.TILE_SHAPE_ISOMETRIC:
+			return PackedVector2Array([Vector2(0.0, -0.5), Vector2(-0.5, 0.0), Vector2(0.0, 0.5), Vector2(0.5, 0.0), Vector2(0.0, -0.5)])
+		_:
+			var overlap: float = 0.25 if tileset.tile_shape == TileSet.TILE_SHAPE_HEXAGON else 0.0
+			var pts := PackedVector2Array([
+				Vector2(0.0, -0.5),
+				Vector2(-0.5, overlap - 0.5),
+				Vector2(-0.5, 0.5 - overlap),
+				Vector2(0.0, 0.5),
+				Vector2(0.5, 0.5 - overlap),
+				Vector2(0.5, overlap - 0.5),
+				Vector2(0.0, -0.5),
+			])
+			if tileset.tile_offset_axis == TileSet.TILE_OFFSET_AXIS_VERTICAL:
+				for i in pts.size():
+					pts[i] = Vector2(pts[i].y, pts[i].x)
+			return pts
 
 
 func _canvas_tilemap_transform() -> Transform2D:
