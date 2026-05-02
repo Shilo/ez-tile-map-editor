@@ -17,15 +17,30 @@ A Godot 4.6 editor plugin that makes **terrain painting** on `TileMapLayer` node
 | **Bucket Fill** | `B` | Flood fill contiguous areas (BFS-based) |
 | **Pick** | `P` | Sample a terrain from an existing cell to select it |
 | **Erase** | `E` | Remove individual cells from the current layer |
-| **Select** | `S` | View-only mode; click to select terrain without painting |
+| **Select** | `S` | Rectangle-select cells; click on selection to move; cut/copy/paste (Ctrl+X/C/V) |
 
 All tools support **undo/redo** with per-stroke merging, so a continuous drag is a single undo step.
+
+### Selection Tool
+The Select tool (`S`) supports a full selection workflow:
+- **Rectangle-select** — click and drag to select all painted cells in a region
+- **Move selection** — click on an existing selection and drag to reposition tiles (with undo)
+- Selection outline uses cell-aware borders (only outer edges are highlighted)
+
+### Cut, Copy & Paste
+| Action | Shortcut | Description |
+|--------|----------|-------------|
+| **Copy** | `Ctrl+C` | Copy selected cells to clipboard |
+| **Cut** | `Ctrl+X` | Copy and remove selected cells |
+| **Paste** | `Ctrl+V` | Enter paste mode with live preview; left-click to place, `Esc` to cancel |
+
+Paste mode shows a translucent preview of the clipboard tiles under the cursor. Click **left** or **right mouse button** to place them.
 
 ### Right-Click Erase
 Hold the right mouse button and drag to erase cells while using any paint tool — no need to switch tools mid-edit.
 
 ### Quick Pick
-**Ctrl+Click** any painted cell in the viewport to instantly pick that cell's terrain.
+**Ctrl+Click** any painted cell in the viewport to instantly pick that cell's terrain. Picking a terrain from the grid while not in a paint tool auto-switches to the Draw tool.
 
 ### Erase All
 Remove every used cell from the current layer in one click, with full undo support.
@@ -43,7 +58,12 @@ A dropdown in the toolbar lists all visible `TileMapLayer` nodes in the scene. S
 Both settings stay in sync with the native Godot TileMap editor.
 
 ### Canvas Overlay
-A real-time preview is drawn over the 2D viewport while painting — colored polygon for the brush area, highlight outline for flood fill target, and dashed rectangle for selection.
+A real-time preview is drawn over the 2D viewport while editing:
+- **Brush preview** — colored polygon under the cursor while painting
+- **Flood fill highlight** — cell outline showing the fill target
+- **Selection outline** — cell-aware border around selected cells
+- **Move preview** — translucent tile preview showing where the selection will land
+- **Paste preview** — textured or colored preview of clipboard tiles before placing
 
 ### Custom Grid Rendering
 - Viewport culling — only draws grid cells visible on screen
@@ -97,6 +117,9 @@ Your `TileSet` must have:
 - Toggle **Grid** to see cell boundaries while painting
 - The terrain grid updates automatically when you modify terrains in the native TileSet panel
 - For large areas, start with **Bucket Fill** (`B`) then refine edges with **Draw** (`D`)
+- **Select** (`S`) a region, then **Cut/Copy/Paste** (Ctrl+X/C/V) to duplicate or rearrange terrain sections
+- **Click a pasted selection** and drag to move it before committing (useful for fine-tuning placement)
+- Press **Esc** to cancel paste mode if you change your mind
 
 ---
 
@@ -117,8 +140,10 @@ Your `TileSet` must have:
 The plugin registers input actions in Godot's Input Map. To change key bindings:
 
 1. Go to **Project → Project Settings → Input Map**
-2. Search for `ez_tile_` to find all plugin actions
+2. Search for `ez_tile_` to find all plugin tool shortcuts
 3. Click an action and assign a new key
+
+> Clipboard shortcuts (`Ctrl+C`, `Ctrl+X`, `Ctrl+V`) and `Esc` to cancel paste are hardcoded editor shortcuts and cannot be changed via the Input Map.
 
 ---
 
