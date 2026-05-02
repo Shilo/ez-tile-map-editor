@@ -76,6 +76,7 @@ var mouse_start: Vector2i = Vector2i.ZERO
 var mouse_current: Vector2i = Vector2i.ZERO
 var mouse_prev: Vector2i = Vector2i.ZERO
 var drag_erasing: bool = false
+var _quick_source_tool: PaintTool = PaintTool.NONE
 var selection_rect: Rect2i = Rect2i()
 var drag_action_index: int = 0
 var drag_action_count: int = 0
@@ -132,6 +133,8 @@ func _on_visibility_changed() -> void:
 	if not visible:
 		if _drag_type == DragType.MOVE:
 			_restore_move_cells()
+		if _quick_source_tool != PaintTool.NONE:
+			_exit_quick_tool()
 		_drag_type = DragType.NONE
 		mouse_down = false
 		draw_overlay = false
@@ -251,6 +254,34 @@ func _on_tool_toggled(_pressed: bool) -> void:
 	for btn in _tool_buttons:
 		if btn:
 			btn.flat = not btn.button_pressed
+
+func _enter_quick_tool(tool: PaintTool) -> void:
+	if _quick_source_tool != PaintTool.NONE:
+		return
+	_quick_source_tool = paint_tool
+	paint_tool = tool
+	drag_erasing = true
+	if _quick_source_tool > 0 and _quick_source_tool < _tool_buttons.size():
+		_tool_buttons[_quick_source_tool].set_pressed_no_signal(false)
+		_tool_buttons[_quick_source_tool].flat = true
+	if tool > 0 and tool < _tool_buttons.size():
+		_tool_buttons[tool].set_pressed_no_signal(true)
+		_tool_buttons[tool].flat = false
+
+func _exit_quick_tool() -> void:
+	if _quick_source_tool == PaintTool.NONE:
+		return
+	var source := _quick_source_tool
+	var current := paint_tool
+	_quick_source_tool = PaintTool.NONE
+	paint_tool = source
+	drag_erasing = false
+	if current > 0 and current < _tool_buttons.size():
+		_tool_buttons[current].set_pressed_no_signal(false)
+		_tool_buttons[current].flat = true
+	if source > 0 and source < _tool_buttons.size():
+		_tool_buttons[source].set_pressed_no_signal(true)
+		_tool_buttons[source].flat = false
 
 func _select_tool_button(tool: PaintTool) -> void:
 	paint_tool = tool
@@ -609,7 +640,7 @@ func canvas_input(event: InputEvent) -> bool:
 		elif mouse_down:
 			draw_overlay = true
 			update_overlay.emit()
-			if paint_tool == PaintTool.DRAW or paint_tool == PaintTool.ERASE or drag_erasing:
+			if paint_tool == PaintTool.DRAW or paint_tool == PaintTool.ERASE:
 				_do_paint_stroke()
 
 	var released: bool = event is InputEventMouseButton and not event.pressed
@@ -618,6 +649,13 @@ func canvas_input(event: InputEvent) -> bool:
 	if released:
 		if event.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]:
 			_held_button_count = maxi(0, _held_button_count - 1)
+		if event.button_index == MOUSE_BUTTON_RIGHT and _quick_source_tool != PaintTool.NONE:
+			_exit_quick_tool()
+			if _held_button_count == 0:
+				mouse_down = false
+				draw_overlay = false
+				update_overlay.emit()
+			return true
 		if _drag_type == DragType.CLIPBOARD_PASTE:
 			return true
 		if paint_tool == PaintTool.SEL:
@@ -636,7 +674,6 @@ func canvas_input(event: InputEvent) -> bool:
 		mouse_down = false
 		if paint_tool == PaintTool.LINE or paint_tool == PaintTool.RECT:
 			_commit_paint_action()
-		drag_erasing = false
 		draw_overlay = false
 		update_overlay.emit()
 		return true
@@ -665,9 +702,9 @@ func canvas_input(event: InputEvent) -> bool:
 			return true
 
 		if event.button_index == MOUSE_BUTTON_RIGHT:
-			drag_erasing = true
+			_enter_quick_tool(PaintTool.ERASE)
 		elif event.button_index == MOUSE_BUTTON_LEFT:
-			drag_erasing = paint_tool == PaintTool.ERASE
+			pass
 		else:
 			return false
 
@@ -688,7 +725,7 @@ func canvas_input(event: InputEvent) -> bool:
 		drag_action_index += 1
 		drag_action_count = 0
 		if paint_tool == PaintTool.BUCKET:
-			_do_bucket_fill(drag_erasing)
+			_do_bucket_fill(paint_tool == PaintTool.ERASE)
 			mouse_down = false
 			draw_overlay = false
 			update_overlay.emit()
@@ -712,7 +749,7 @@ func _commit_paint_action() -> void:
 		return
 	var saved := _save_cells(_expand_cells(cells))
 	var t := _get_selected_terrain()
-	if drag_erasing or selected_index < 0:
+	if paint_tool == PaintTool.ERASE or selected_index < 0:
 		undo_manager.create_action("Erase Action", UndoRedo.MERGE_DISABLE, tilemap)
 		for c in cells:
 			undo_manager.add_do_method(tilemap, "erase_cell", c)
@@ -732,7 +769,7 @@ func _do_paint_stroke() -> void:
 	var expand := _expand_cells(cells)
 	var saved := _save_cells(expand)
 	var t := _get_selected_terrain()
-	if drag_erasing or selected_index < 0:
+	if paint_tool == PaintTool.ERASE or selected_index < 0:
 		undo_manager.create_action("Erase Terrain" + str(drag_action_index), UndoRedo.MERGE_ALL, tilemap, true)
 		for c in cells:
 			undo_manager.add_do_method(tilemap, "erase_cell", c)
@@ -768,7 +805,7 @@ func _expand_cells(cells: Array[Vector2i]) -> Array:
 
 func _get_brush_cells() -> Array[Vector2i]:
 	match paint_tool:
-		PaintTool.DRAW:
+		PaintTool.DRAW, PaintTool.ERASE:
 			return [mouse_current]
 		PaintTool.LINE:
 			return _tileset_line(mouse_start, mouse_current)
@@ -885,8 +922,6 @@ func canvas_draw(overlay: Control) -> void:
 	var color: Color
 	if paint_tool == PaintTool.PICK:
 		color = Color(0.2, 0.8, 1.0, 0.35)
-	elif mouse_down and drag_erasing:
-		color = COLOR_ERASE_OVERLAY
 	elif paint_tool == PaintTool.ERASE or selected_index < 0:
 		color = COLOR_ERASE_OVERLAY
 	else:
