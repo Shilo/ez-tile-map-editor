@@ -35,6 +35,7 @@ var tilemap: TileMapLayer = null:
 		_selection.clear()
 		_drag_type = DragType.NONE
 		_drag_modified.clear()
+		_held_button_count = 0
 		mouse_down = false
 		_update_layer_dropdown.call_deferred()
 		_update_erase_buttons.call_deferred()
@@ -69,6 +70,7 @@ var drag_action_count: int = 0
 var _selection: Dictionary = {}
 var _drag_type: int = DragType.NONE
 var _drag_modified: Dictionary = {}
+var _held_button_count: int = 0
 var plugin: EditorPlugin = null
 var _native_tilemap_editor: Object = null
 var _native_grid_button: BaseButton = null
@@ -159,9 +161,11 @@ func _on_tool_changed(tool: PaintTool) -> void:
 	if paint_tool != PaintTool.PICK and paint_tool != PaintTool.SEL:
 		_prev_tool = paint_tool
 	if _drag_type == DragType.MOVE:
+		push_warning("[SEL] TOOL_CHANGE restoring move cells")
 		_restore_move_cells()
 		update_overlay.emit()
 	_drag_type = DragType.NONE
+	_held_button_count = 0
 	if tool != PaintTool.SEL:
 		_selection.clear()
 	mouse_down = false
@@ -528,18 +532,21 @@ func canvas_input(event: InputEvent) -> bool:
 	var clicked: bool = event is InputEventMouseButton and event.pressed
 
 	if released:
+		if event.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]:
+			_held_button_count = maxi(0, _held_button_count - 1)
+			push_warning("[SEL] RELEASE bt=" + str(event.button_index) + " held=" + str(_held_button_count) + " md=" + str(mouse_down) + " dt=" + str(_drag_type))
 		if paint_tool == PaintTool.SEL:
-			if _drag_type == DragType.SELECT and mouse_down:
+			if mouse_down and _held_button_count == 0:
+				push_warning("[SEL] COMMIT dt=" + str(_drag_type))
 				mouse_down = false
-				_commit_selection()
+				if _drag_type == DragType.SELECT:
+					_commit_selection()
+				elif _drag_type == DragType.MOVE:
+					_commit_move()
 				draw_overlay = false
 				update_overlay.emit()
 				return true
-			elif _drag_type == DragType.MOVE:
-				_commit_move()
-				draw_overlay = false
-				update_overlay.emit()
-				return true
+			return true
 		if not mouse_down:
 			return false
 		mouse_down = false
@@ -551,8 +558,11 @@ func canvas_input(event: InputEvent) -> bool:
 		return true
 
 	if clicked:
+		if event.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]:
+			_held_button_count += 1
+			push_warning("[SEL] CLICK bt=" + str(event.button_index) + " held=" + str(_held_button_count) + " md=" + str(mouse_down))
 		if paint_tool == PaintTool.SEL:
-			if event.button_index == MOUSE_BUTTON_LEFT:
+			if event.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT] and not mouse_down:
 				if _selection.has(mouse_current):
 					_start_move(mouse_current)
 				else:
@@ -1119,14 +1129,29 @@ func _draw_cells_filled(rect: Rect2i, color: Color, overlay: Control) -> void:
 func _draw_move_preview(offset: Vector2i, overlay: Control) -> void:
 	var tform := _canvas_tilemap_transform()
 	var cell_size := tileset.tile_size
+	var half := Vector2(cell_size) / 2.0
 	var polygon := PackedVector2Array([Vector2(-0.5, -0.5), Vector2(0.5, -0.5), Vector2(0.5, 0.5), Vector2(-0.5, 0.5)])
+
 	for c in _drag_modified:
+		var dc: Dictionary = _drag_modified[c]
+		if not dc.has_cell:
+			continue
 		var new_cell: Vector2i = c + offset
-		var cell_transform := Transform2D(0.0, cell_size, 0.0, tilemap.map_to_local(new_cell))
-		overlay.draw_colored_polygon(tform * cell_transform * polygon, Color(1.0, 1.0, 1.0, 0.3))
+		var source := tileset.get_source(dc.source_id) as TileSetAtlasSource
+		if source and source.texture:
+			var region := source.get_tile_texture_region(dc.atlas_coords, dc.alternative_tile)
+			var center := tilemap.map_to_local(new_cell)
+			var dest_top_left := tform * (center - half)
+			var dest_bottom_right := tform * (center + half)
+			var dest_rect := Rect2(dest_top_left, dest_bottom_right - dest_top_left)
+			overlay.draw_texture_rect_region(source.texture, dest_rect, region, Color(1.0, 1.0, 1.0, 0.35))
+		else:
+			var cell_transform := Transform2D(0.0, cell_size, 0.0, tilemap.map_to_local(new_cell))
+			overlay.draw_colored_polygon(tform * cell_transform * polygon, Color(1.0, 1.0, 1.0, 0.25))
 
 func _commit_selection() -> void:
 	var rect := Rect2i(mouse_start, mouse_current - mouse_start).abs()
+	push_warning("[SEL] COMMIT_SELECT rect=(%d,%d %dx%d)" % [rect.position.x, rect.position.y, rect.size.x, rect.size.y])
 	_selection.clear()
 	for x in range(rect.position.x, rect.position.x + rect.size.x + 1):
 		for y in range(rect.position.y, rect.position.y + rect.size.y + 1):
@@ -1136,6 +1161,7 @@ func _commit_selection() -> void:
 	_drag_type = DragType.NONE
 
 func _start_move(mouse_pos: Vector2i) -> void:
+	push_warning("[SEL] START_MOVE sel_size=%d pos=(%d,%d)" % [_selection.size(), mouse_pos.x, mouse_pos.y])
 	_drag_type = DragType.MOVE
 	mouse_down = true
 	mouse_start = mouse_pos
@@ -1154,6 +1180,7 @@ func _start_move(mouse_pos: Vector2i) -> void:
 	update_overlay.emit()
 
 func _restore_move_cells() -> void:
+	push_warning("[SEL] RESTORE_MOVE count=%d" % _drag_modified.size())
 	for c in _drag_modified:
 		var data: Dictionary = _drag_modified[c]
 		if data.has_cell:
@@ -1161,6 +1188,7 @@ func _restore_move_cells() -> void:
 	_drag_modified.clear()
 
 func _commit_move() -> void:
+	push_warning("[SEL] COMMIT_MOVE modified=%d offset=(%d,%d)" % [_drag_modified.size(), mouse_current.x - mouse_start.x, mouse_current.y - mouse_start.y])
 	if _drag_modified.is_empty() or not undo_manager:
 		_drag_type = DragType.NONE
 		mouse_down = false
@@ -1228,6 +1256,7 @@ func _commit_move() -> void:
 		_selection[c] = true
 	_drag_modified.clear()
 	_drag_type = DragType.NONE
+	_held_button_count = 0
 	mouse_down = false
 
 func _set_selection(arr: Array) -> void:
