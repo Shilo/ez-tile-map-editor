@@ -80,6 +80,9 @@ func _ready() -> void:
 
 	select_button.pressed.connect(_on_tool_changed.bind(PaintTool.SEL))
 	draw_button.pressed.connect(_on_tool_changed.bind(PaintTool.DRAW))
+
+	layer_highlight.icon = get_theme_icon("TileMapHighlightSelected", "EditorIcons")
+	layer_grid.icon = get_theme_icon("Grid", "EditorIcons")
 	line_button.pressed.connect(_on_tool_changed.bind(PaintTool.LINE))
 	rect_button.pressed.connect(_on_tool_changed.bind(PaintTool.RECT))
 	fill_button.pressed.connect(_on_tool_changed.bind(PaintTool.BUCKET))
@@ -991,16 +994,35 @@ func _await_dialog(dialog: AcceptDialog) -> bool:
 	return confirmed
 
 func _is_editor_select_mode() -> bool:
-	var editor_base := EditorInterface.get_base_control()
-	return _find_select_mode_pressed(editor_base)
+	if not Engine.is_editor_hint():
+		return true
 
-func _find_select_mode_pressed(node: Node) -> bool:
-	for child in node.get_children():
-		if child is BaseButton:
-			var btn: BaseButton = child
-			var tt := btn.tooltip_text
-			if tt and tt.begins_with("Select Mode"):
-				return btn.button_pressed
-		if _find_select_mode_pressed(child):
+	var vp := EditorInterface.get_editor_viewport_2d()
+	if not vp:
+		return true
+
+	# Walk up from the viewport to find a common ancestor that contains the toolbar
+	var node: Node = vp
+	for _i in 6:
+		node = node.get_parent()
+		if not node:
 			return true
-	return false
+		var pressed := _find_first_toggle_button(node)
+		if pressed == -2:
+			return true # Error case, allow drawing
+		if pressed != -1:
+			return pressed == 1
+
+	return true
+
+func _find_first_toggle_button(node: Node) -> int:
+	# Returns -1 if no toggle button found in an HBoxContainer, 0 if not pressed, 1 if pressed, -2 on error
+	for child in node.get_children():
+		if child is HBoxContainer:
+			for btn in child.get_children():
+				if btn is BaseButton and btn.toggle_mode:
+					return 1 if btn.button_pressed else 0
+		var found := _find_first_toggle_button(child)
+		if found != -1:
+			return found
+	return -1

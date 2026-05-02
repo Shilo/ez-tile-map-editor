@@ -76,7 +76,6 @@ tooltip_text = "Selection Tool (S)"
 toggle_mode = true
 shortcut = SubResource("shortcut_select")
 button_group = SubResource("draw_group")
-flat = true
 
 [node name="Draw" type="Button" parent="VBoxContainer/Toolbar"]
 unique_name_in_owner = true
@@ -88,7 +87,6 @@ toggle_mode = true
 button_pressed = true
 shortcut = SubResource("shortcut_draw")
 button_group = SubResource("draw_group")
-flat = true
 
 [node name="Line" type="Button" parent="VBoxContainer/Toolbar"]
 unique_name_in_owner = true
@@ -97,7 +95,6 @@ tooltip_text = "Draw line (L)"
 toggle_mode = true
 shortcut = SubResource("shortcut_line")
 button_group = SubResource("draw_group")
-flat = true
 
 [node name="Rect" type="Button" parent="VBoxContainer/Toolbar"]
 unique_name_in_owner = true
@@ -106,7 +103,6 @@ tooltip_text = "Draw rectangle (R)"
 toggle_mode = true
 shortcut = SubResource("shortcut_rect")
 button_group = SubResource("draw_group")
-flat = true
 
 [node name="Fill" type="Button" parent="VBoxContainer/Toolbar"]
 unique_name_in_owner = true
@@ -115,7 +111,9 @@ tooltip_text = "Bucket fill terrain (B)"
 toggle_mode = true
 shortcut = SubResource("shortcut_fill")
 button_group = SubResource("draw_group")
-flat = true
+
+[node name="VSeparator" type="VSeparator" parent="VBoxContainer/Toolbar"]
+layout_mode = 2
 
 [node name="Pick" type="Button" parent="VBoxContainer/Toolbar"]
 unique_name_in_owner = true
@@ -124,7 +122,6 @@ tooltip_text = "Pick terrain (P / Ctrl+Click)"
 toggle_mode = true
 shortcut = SubResource("shortcut_pick")
 button_group = SubResource("draw_group")
-flat = true
 
 [node name="Erase" type="Button" parent="VBoxContainer/Toolbar"]
 unique_name_in_owner = true
@@ -133,7 +130,6 @@ tooltip_text = "Erase terrain (E)"
 toggle_mode = true
 shortcut = SubResource("shortcut_erase")
 button_group = SubResource("draw_group")
-flat = true
 
 [node name="VSeparator" type="VSeparator" parent="VBoxContainer/Toolbar"]
 layout_mode = 2
@@ -161,6 +157,9 @@ layout_mode = 2
 tooltip_text = "Toggle grid visibility"
 toggle_mode = true
 flat = true
+
+[node name="VSeparator" type="VSeparator" parent="VBoxContainer/Toolbar"]
+layout_mode = 2
 
 [node name="LayerSelect" type="OptionButton" parent="VBoxContainer/Toolbar"]
 unique_name_in_owner = true
