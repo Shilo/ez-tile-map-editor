@@ -262,6 +262,7 @@ func _on_entry_gui_input(event: InputEvent, panel: PanelContainer, index: int) -
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		selected_index = index
 		_update_selection_buttons()
+		_ensure_editor_select_mode()
 
 func _update_entry_style(panel: PanelContainer, selected: bool) -> void:
 	if selected:
@@ -1016,8 +1017,8 @@ func _ensure_editor_select_mode() -> void:
 		return
 	var btn := _find_canvas_select_mode_button()
 	if btn and not btn.button_pressed:
-		btn.set_pressed_no_signal(true)
-		btn.toggled.emit(true)
+		btn.button_pressed = true
+		btn.pressed.emit()
 
 func _find_canvas_select_mode_button() -> BaseButton:
 	var vp := EditorInterface.get_editor_viewport_2d()
@@ -1034,11 +1035,18 @@ func _find_canvas_select_mode_button() -> BaseButton:
 	return null
 
 func _find_first_toggle_in(node: Node) -> BaseButton:
+	var mode_names := ["Select Mode", "Select"]
 	for child in node.get_children():
 		if child is HBoxContainer:
+			var first_toggle: BaseButton = null
 			for btn in child.get_children():
 				if btn is BaseButton and btn.toggle_mode:
-					return btn
+					if btn.tooltip_text in mode_names:
+						return btn
+					if not first_toggle:
+						first_toggle = btn
+			if first_toggle:
+				return first_toggle
 		var found := _find_first_toggle_in(child)
 		if found:
 			return found
