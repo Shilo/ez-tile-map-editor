@@ -164,6 +164,7 @@ func _on_tilemap_visibility_changed() -> void:
 	_update_empty_state.call_deferred()
 
 func _on_tool_changed(tool: PaintTool) -> void:
+	print("[EZ] _on_tool_changed called: tool=", tool, " current=", paint_tool, " button_count=", _held_button_count)
 	if paint_tool != PaintTool.PICK and paint_tool != PaintTool.SEL:
 		_prev_tool = paint_tool
 	if _drag_type == DragType.MOVE:
@@ -645,7 +646,7 @@ func _commit_paint_action() -> void:
 		for c in cells:
 			undo_manager.add_do_method(tilemap, "erase_cell", c)
 		undo_manager.add_undo_method(self, "_restore_cells", saved, tilemap)
-	else:
+	elif not t.is_empty():
 		undo_manager.create_action("Paint Action", UndoRedo.MERGE_DISABLE, tilemap)
 		undo_manager.add_do_method(tilemap, "set_cells_terrain_connect", cells, t.set, t.idx, true)
 		undo_manager.add_undo_method(self, "_restore_cells", saved, tilemap)
@@ -665,7 +666,7 @@ func _do_paint_stroke() -> void:
 		for c in cells:
 			undo_manager.add_do_method(tilemap, "erase_cell", c)
 		undo_manager.add_undo_method(self, "_restore_cells", saved, tilemap)
-	elif not t.is_empty():
+	elif not t.is_empty() and t.get("set", -1) >= 0 and t.get("idx", -1) >= 0:
 		undo_manager.create_action("Paint Terrain" + str(drag_action_index), UndoRedo.MERGE_ALL, tilemap, true)
 		undo_manager.add_do_method(tilemap, "set_cells_terrain_connect", cells, t.set, t.idx, true)
 		undo_manager.add_undo_method(self, "_restore_cells", saved, tilemap)
@@ -722,7 +723,7 @@ func _do_bucket_fill(erasing: bool) -> void:
 		for c in cells:
 			undo_manager.add_do_method(tilemap, "erase_cell", c)
 		undo_manager.add_undo_method(self, "_restore_cells", saved, tilemap)
-	elif not t.is_empty():
+	elif not t.is_empty() and t.get("set", -1) >= 0 and t.get("idx", -1) >= 0:
 		undo_manager.create_action("Paint Fill", UndoRedo.MERGE_DISABLE, tilemap)
 		undo_manager.add_do_method(tilemap, "set_cells_terrain_connect", cells, t.set, t.idx, true)
 		undo_manager.add_undo_method(self, "_restore_cells", saved, tilemap)
@@ -1289,18 +1290,24 @@ func _handle_key_event(event: InputEventKey) -> bool:
 		update_overlay.emit()
 		return true
 
-	if not event.is_command_or_control_pressed():
+	if event.is_command_or_control_pressed():
+		match event.keycode:
+			KEY_C:
+				_do_copy()
+				return true
+			KEY_X:
+				_do_cut()
+				return true
+			KEY_V:
+				_do_paste()
+				return true
 		return false
 
-	match event.keycode:
-		KEY_C:
-			_do_copy()
-			return true
-		KEY_X:
-			_do_cut()
-			return true
-		KEY_V:
-			_do_paste()
+	for i in range(1, _tool_buttons.size()):
+		var btn := _tool_buttons[i] as Button
+		if btn and btn.visible and not btn.disabled and btn.shortcut and btn.shortcut.matches_event(event):
+			btn.button_pressed = true
+			btn.pressed.emit()
 			return true
 	return false
 
