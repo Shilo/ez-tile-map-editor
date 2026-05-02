@@ -94,7 +94,12 @@ func _re_show() -> void:
 	if _button and _button.button_pressed:
 		make_bottom_panel_item_visible(_panel)
 		_panel.about_to_be_visible()
+		_re_show2.call_deferred()
 
+func _re_show2() -> void:
+	if _button and _button.button_pressed:
+		make_bottom_panel_item_visible(_panel)
+		_panel.about_to_be_visible()
 
 
 func _clear() -> void:

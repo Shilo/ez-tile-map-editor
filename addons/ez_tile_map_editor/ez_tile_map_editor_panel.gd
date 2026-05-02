@@ -137,6 +137,7 @@ func _on_tool_changed(tool: PaintTool) -> void:
 		_prev_tool = paint_tool
 	paint_tool = tool
 	selection_rect = Rect2i()
+	_ensure_editor_select_mode()
 
 func _select_tool_button(tool: PaintTool) -> void:
 	paint_tool = tool
@@ -996,33 +997,40 @@ func _await_dialog(dialog: AcceptDialog) -> bool:
 func _is_editor_select_mode() -> bool:
 	if not Engine.is_editor_hint():
 		return true
+	var btn := _find_canvas_select_mode_button()
+	if not btn:
+		return true
+	return btn.button_pressed
 
+func _ensure_editor_select_mode() -> void:
+	if not Engine.is_editor_hint():
+		return
+	var btn := _find_canvas_select_mode_button()
+	if btn and not btn.button_pressed:
+		btn.set_pressed_no_signal(true)
+		btn.toggled.emit(true)
+
+func _find_canvas_select_mode_button() -> BaseButton:
 	var vp := EditorInterface.get_editor_viewport_2d()
 	if not vp:
-		return true
-
-	# Walk up from the viewport to find a common ancestor that contains the toolbar
+		return null
 	var node: Node = vp
 	for _i in 6:
 		node = node.get_parent()
 		if not node:
-			return true
-		var pressed := _find_first_toggle_button(node)
-		if pressed == -2:
-			return true # Error case, allow drawing
-		if pressed != -1:
-			return pressed == 1
+			return null
+		var result := _find_first_toggle_in(node)
+		if result:
+			return result
+	return null
 
-	return true
-
-func _find_first_toggle_button(node: Node) -> int:
-	# Returns -1 if no toggle button found in an HBoxContainer, 0 if not pressed, 1 if pressed, -2 on error
+func _find_first_toggle_in(node: Node) -> BaseButton:
 	for child in node.get_children():
 		if child is HBoxContainer:
 			for btn in child.get_children():
 				if btn is BaseButton and btn.toggle_mode:
-					return 1 if btn.button_pressed else 0
-		var found := _find_first_toggle_button(child)
-		if found != -1:
+					return btn
+		var found := _find_first_toggle_in(child)
+		if found:
 			return found
-	return -1
+	return null
