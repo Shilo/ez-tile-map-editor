@@ -10,6 +10,7 @@ func _log(msg: String) -> void:
 
 var _panel: Control
 var _button: Button
+var _overlay: Control
 
 
 const DEFAULT_INPUT_BINDINGS := {
@@ -25,6 +26,7 @@ func _enter_tree() -> void:
 	_log("_enter_tree")
 	_setup_input_actions()
 	_panel = preload("res://addons/ez_tile_map_editor/ez_tile_map_editor_panel.tscn").instantiate()
+	_panel.plugin = self
 	_button = add_control_to_bottom_panel(_panel, "EZ TileMap")
 	_button.visible = false
 
@@ -60,8 +62,9 @@ func _setup_input_actions() -> void:
 			InputMap.add_action(action)
 			var ev := InputEventKey.new()
 			ev.keycode = DEFAULT_INPUT_BINDINGS[action]
+			ev.command_or_control_autoremap = false
 			InputMap.action_add_event(action, ev)
-			_log("  added input action: %s" % action)
+			_log("  added input action: %s (key=%d)" % [action, DEFAULT_INPUT_BINDINGS[action]])
 
 
 func _teardown_input_actions() -> void:
@@ -125,5 +128,11 @@ func _forward_canvas_gui_input(event: InputEvent) -> bool:
 
 
 func _forward_canvas_draw_over_viewport(overlay: Control) -> void:
+	_overlay = overlay
 	if _panel.is_visible_in_tree():
 		_panel.canvas_draw(overlay)
+
+
+func _queue_overlay_redraw() -> void:
+	if _overlay:
+		_overlay.queue_redraw()

@@ -69,6 +69,7 @@ var mouse_prev: Vector2i = Vector2i.ZERO
 var drag_erasing: bool = false
 var drag_action_index: int = 0
 var drag_action_count: int = 0
+var plugin: EditorPlugin = null
 
 
 func _ready() -> void:
@@ -388,6 +389,8 @@ func _on_layer_highlight_toggled(toggled: bool) -> void:
 	settings.set_setting("editors/tiles_editor/highlight_selected_layer", toggled)
 	settings.emit_changed()
 	update_overlay.emit()
+	if plugin and plugin.has_method("_queue_overlay_redraw"):
+		plugin._queue_overlay_redraw()
 
 
 func _on_layer_grid_toggled(toggled: bool) -> void:
@@ -396,6 +399,8 @@ func _on_layer_grid_toggled(toggled: bool) -> void:
 	settings.set_setting("editors/tiles_editor/display_grid", toggled)
 	settings.emit_changed()
 	update_overlay.emit()
+	if plugin and plugin.has_method("_queue_overlay_redraw"):
+		plugin._queue_overlay_redraw()
 
 
 func about_to_be_visible() -> void:
