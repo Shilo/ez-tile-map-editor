@@ -96,7 +96,11 @@ func _ready() -> void:
 
 	draw_button.button_pressed = true
 	_tool_buttons = [null, select_button, draw_button, line_button, rect_button, fill_button, pick_button, erase_button]
+	for btn in _tool_buttons:
+		if btn:
+			btn.toggled.connect(_on_tool_toggled)
 	_update_empty_state()
+	_on_tool_toggled(false)
 
 func _is_tilemap_editable() -> bool:
 	return tilemap != null and tilemap.is_visible_in_tree()
@@ -138,6 +142,11 @@ func _on_tool_changed(tool: PaintTool) -> void:
 	paint_tool = tool
 	selection_rect = Rect2i()
 	_ensure_editor_select_mode()
+
+func _on_tool_toggled(_pressed: bool) -> void:
+	for btn in _tool_buttons:
+		if btn:
+			btn.flat = not btn.button_pressed
 
 func _select_tool_button(tool: PaintTool) -> void:
 	paint_tool = tool
