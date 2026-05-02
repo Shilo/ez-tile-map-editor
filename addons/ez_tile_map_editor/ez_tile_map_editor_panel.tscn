@@ -1,52 +1,57 @@
-[gd_scene load_steps=16 format=3 uid="uid://cez_tile_map_editor_panel"]
+[gd_scene format=3 uid="uid://1bhkbncfojmv"]
 
-[ext_resource type="Script" path="res://addons/ez_tile_map_editor/ez_tile_map_editor_panel.gd" id="1_panel"]
+[ext_resource type="Script" uid="uid://d4bsm0kh3eusm" path="res://addons/ez_tile_map_editor/ez_tile_map_editor_panel.gd" id="1_panel"]
 
 [sub_resource type="ButtonGroup" id="draw_group"]
 
 [sub_resource type="InputEventAction" id="action_draw"]
-action = "ez_tile_draw"
+action = &"ez_tile_draw"
 
 [sub_resource type="Shortcut" id="shortcut_draw"]
 events = [SubResource("action_draw")]
 
+[sub_resource type="DPITexture" id="DPITexture_kny1k"]
+_source = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\"><path fill=\"#ff5d5d\" d=\"M2 1v8.586l1.293-1.293a1 1 0 0 1 1.414 0L7 10.587l2.293-2.293a1 1 0 0 1 1.414 0L13 10.586l1-1V6H9V1H2zm8 0v4h4zm-6 9.414-2 2V15h12v-2.586l-.293.293a1 1 0 0 1-1.414 0L10 10.414l-2.293 2.293a1 1 0 0 1-1.414 0L4 10.414z\"/></svg>
+"
+
 [sub_resource type="InputEventAction" id="action_line"]
-action = "ez_tile_line"
+action = &"ez_tile_line"
 
 [sub_resource type="Shortcut" id="shortcut_line"]
 events = [SubResource("action_line")]
 
 [sub_resource type="InputEventAction" id="action_rect"]
-action = "ez_tile_rect"
+action = &"ez_tile_rect"
 
 [sub_resource type="Shortcut" id="shortcut_rect"]
 events = [SubResource("action_rect")]
 
 [sub_resource type="InputEventAction" id="action_fill"]
-action = "ez_tile_fill"
+action = &"ez_tile_fill"
 
 [sub_resource type="Shortcut" id="shortcut_fill"]
 events = [SubResource("action_fill")]
 
+[sub_resource type="InputEventAction" id="action_select"]
+action = &"ez_tile_select"
+
+[sub_resource type="Shortcut" id="shortcut_select"]
+events = [SubResource("action_select")]
+
 [sub_resource type="InputEventAction" id="action_pick"]
-action = "ez_tile_pick"
+action = &"ez_tile_pick"
 
 [sub_resource type="Shortcut" id="shortcut_pick"]
 events = [SubResource("action_pick")]
 
 [sub_resource type="InputEventAction" id="action_erase"]
-action = "ez_tile_erase"
+action = &"ez_tile_erase"
 
 [sub_resource type="Shortcut" id="shortcut_erase"]
 events = [SubResource("action_erase")]
 
-[sub_resource type="InputEventAction" id="action_select"]
-action = "ez_tile_select"
-
-[sub_resource type="Shortcut" id="shortcut_select"]
-events = [SubResource("action_select")]
-
-[node name="EZTileMapEditorPanel" type="Control"]
+[node name="EZTileMapEditorPanel" type="Control" unique_id=458619934]
+clip_contents = true
 custom_minimum_size = Vector2(0, 120)
 layout_mode = 3
 anchors_preset = 15
@@ -55,10 +60,9 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 focus_mode = 2
-clip_contents = true
 script = ExtResource("1_panel")
 
-[node name="VBoxContainer" type="VBoxContainer" parent="."]
+[node name="VBoxContainer" type="VBoxContainer" parent="." unique_id=1351526765]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -66,115 +70,131 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="Toolbar" type="HBoxContainer" parent="VBoxContainer"]
+[node name="Toolbar" type="HBoxContainer" parent="VBoxContainer" unique_id=1615095200]
 layout_mode = 2
 
-[node name="Select" type="Button" parent="VBoxContainer/Toolbar"]
-unique_name_in_owner = true
-layout_mode = 2
-tooltip_text = "Selection Tool (S)"
-toggle_mode = true
-shortcut = SubResource("shortcut_select")
-button_group = SubResource("draw_group")
-flat = true
-
-[node name="Draw" type="Button" parent="VBoxContainer/Toolbar"]
+[node name="Draw" type="Button" parent="VBoxContainer/Toolbar" unique_id=1129836330]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Draw terrain (D)
 Shift: Draw line
 Ctrl+Shift: Draw rectangle"
+disabled = true
 toggle_mode = true
 button_pressed = true
-shortcut = SubResource("shortcut_draw")
 button_group = SubResource("draw_group")
-flat = true
+shortcut = SubResource("shortcut_draw")
+icon = SubResource("DPITexture_kny1k")
 
-[node name="Line" type="Button" parent="VBoxContainer/Toolbar"]
+[node name="Line" type="Button" parent="VBoxContainer/Toolbar" unique_id=1030726166]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Draw line (L)"
+disabled = true
 toggle_mode = true
-shortcut = SubResource("shortcut_line")
 button_group = SubResource("draw_group")
+shortcut = SubResource("shortcut_line")
+icon = SubResource("DPITexture_kny1k")
 flat = true
 
-[node name="Rect" type="Button" parent="VBoxContainer/Toolbar"]
+[node name="Rect" type="Button" parent="VBoxContainer/Toolbar" unique_id=1024733811]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Draw rectangle (R)"
+disabled = true
 toggle_mode = true
-shortcut = SubResource("shortcut_rect")
 button_group = SubResource("draw_group")
+shortcut = SubResource("shortcut_rect")
+icon = SubResource("DPITexture_kny1k")
 flat = true
 
-[node name="Fill" type="Button" parent="VBoxContainer/Toolbar"]
+[node name="Fill" type="Button" parent="VBoxContainer/Toolbar" unique_id=1211768775]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Bucket fill terrain (B)"
+disabled = true
 toggle_mode = true
-shortcut = SubResource("shortcut_fill")
 button_group = SubResource("draw_group")
+shortcut = SubResource("shortcut_fill")
+icon = SubResource("DPITexture_kny1k")
 flat = true
 
-[node name="VSeparator1" type="VSeparator" parent="VBoxContainer/Toolbar"]
+[node name="VSeparator1" type="VSeparator" parent="VBoxContainer/Toolbar" unique_id=2043930170]
 layout_mode = 2
 
-[node name="Pick" type="Button" parent="VBoxContainer/Toolbar"]
+[node name="Select" type="Button" parent="VBoxContainer/Toolbar" unique_id=839352345]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Selection Tool (S)"
+disabled = true
+toggle_mode = true
+button_group = SubResource("draw_group")
+shortcut = SubResource("shortcut_select")
+icon = SubResource("DPITexture_kny1k")
+flat = true
+
+[node name="Pick" type="Button" parent="VBoxContainer/Toolbar" unique_id=1034510133]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Pick terrain (P / Ctrl+Click)"
+disabled = true
 toggle_mode = true
-shortcut = SubResource("shortcut_pick")
 button_group = SubResource("draw_group")
+shortcut = SubResource("shortcut_pick")
+icon = SubResource("DPITexture_kny1k")
 flat = true
 
-[node name="Erase" type="Button" parent="VBoxContainer/Toolbar"]
+[node name="Erase" type="Button" parent="VBoxContainer/Toolbar" unique_id=343540273]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Erase terrain (E)"
 toggle_mode = true
-shortcut = SubResource("shortcut_erase")
 button_group = SubResource("draw_group")
+shortcut = SubResource("shortcut_erase")
+icon = SubResource("DPITexture_kny1k")
 flat = true
 
-[node name="VSeparator2" type="VSeparator" parent="VBoxContainer/Toolbar"]
+[node name="VSeparator2" type="VSeparator" parent="VBoxContainer/Toolbar" unique_id=695127218]
 layout_mode = 2
 
-[node name="EraseAll" type="Button" parent="VBoxContainer/Toolbar"]
+[node name="EraseAll" type="Button" parent="VBoxContainer/Toolbar" unique_id=2063687356]
 unique_name_in_owner = true
+self_modulate = Color(1, 0.3, 0.3, 1)
 layout_mode = 2
 tooltip_text = "Erase all tiles on selected layer"
+icon = SubResource("DPITexture_kny1k")
 flat = true
 
-[node name="Spacer" type="Control" parent="VBoxContainer/Toolbar"]
+[node name="Spacer" type="Control" parent="VBoxContainer/Toolbar" unique_id=1902240989]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="LayerHighlight" type="Button" parent="VBoxContainer/Toolbar"]
+[node name="LayerHighlight" type="Button" parent="VBoxContainer/Toolbar" unique_id=1321237291]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Highlight selected layer"
 toggle_mode = true
+icon = SubResource("DPITexture_kny1k")
 flat = true
 
-[node name="LayerGrid" type="Button" parent="VBoxContainer/Toolbar"]
+[node name="LayerGrid" type="Button" parent="VBoxContainer/Toolbar" unique_id=692744213]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Toggle grid visibility"
 toggle_mode = true
+icon = SubResource("DPITexture_kny1k")
 flat = true
 
-[node name="VSeparator3" type="VSeparator" parent="VBoxContainer/Toolbar"]
+[node name="VSeparator3" type="VSeparator" parent="VBoxContainer/Toolbar" unique_id=2092628571]
 layout_mode = 2
 
-[node name="LayerSelect" type="OptionButton" parent="VBoxContainer/Toolbar"]
+[node name="LayerSelect" type="OptionButton" parent="VBoxContainer/Toolbar" unique_id=1587315912]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 size_flags_horizontal = 0
 
-[node name="EmptyLabel" type="Label" parent="VBoxContainer"]
+[node name="EmptyLabel" type="Label" parent="VBoxContainer" unique_id=510950093]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
@@ -184,13 +204,14 @@ horizontal_alignment = 1
 vertical_alignment = 1
 autowrap_mode = 3
 
-[node name="TerrainScroll" type="ScrollContainer" parent="VBoxContainer"]
+[node name="TerrainScroll" type="ScrollContainer" parent="VBoxContainer" unique_id=864314104]
 unique_name_in_owner = true
+visible = false
 layout_mode = 2
 size_flags_vertical = 3
 horizontal_scroll_mode = 3
 
-[node name="TerrainGrid" type="HFlowContainer" parent="VBoxContainer/TerrainScroll"]
+[node name="TerrainGrid" type="HFlowContainer" parent="VBoxContainer/TerrainScroll" unique_id=1420134549]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3

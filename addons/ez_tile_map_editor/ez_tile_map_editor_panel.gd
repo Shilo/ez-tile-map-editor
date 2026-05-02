@@ -3,8 +3,13 @@ extends Control
 
 signal update_overlay
 
-enum PaintTool { NONE, SEL, DRAW, LINE, RECT, BUCKET, PICK, ERASE }
-enum DragType { NONE, SELECT, MOVE }
+enum PaintTool { NONE, DRAW, LINE, RECT, BUCKET, SEL, PICK, ERASE }
+enum DragType { NONE, SELECT, MOVE, CLIPBOARD_PASTE }
+
+const _draw_tools: Array[int] = [PaintTool.DRAW, PaintTool.LINE, PaintTool.RECT, PaintTool.BUCKET]
+
+func _is_draw_tool() -> bool:
+	return paint_tool in _draw_tools
 
 @onready var draw_button: Button = %Draw
 @onready var line_button: Button = %Line
@@ -71,6 +76,7 @@ var _selection: Dictionary = {}
 var _drag_type: int = DragType.NONE
 var _drag_modified: Dictionary = {}
 var _held_button_count: int = 0
+var _clipboard: TileMapPattern
 var plugin: EditorPlugin = null
 var _native_tilemap_editor: Object = null
 var _native_grid_button: BaseButton = null
@@ -78,11 +84,11 @@ var _native_highlight_button: BaseButton = null
 var _syncing_native: bool = false
 
 func _ready() -> void:
-	select_button.icon = get_theme_icon("ToolSelect", "EditorIcons")
 	draw_button.icon = get_theme_icon("Edit", "EditorIcons")
 	line_button.icon = get_theme_icon("Line", "EditorIcons")
 	rect_button.icon = get_theme_icon("Rectangle", "EditorIcons")
 	fill_button.icon = get_theme_icon("Bucket", "EditorIcons")
+	select_button.icon = get_theme_icon("ToolSelect", "EditorIcons")
 	pick_button.icon = get_theme_icon("ColorPick", "EditorIcons")
 	erase_button.icon = get_theme_icon("Eraser", "EditorIcons")
 	erase_all_button.icon = get_theme_icon("Clear", "EditorIcons")
@@ -90,7 +96,6 @@ func _ready() -> void:
 
 	visibility_changed.connect(_on_visibility_changed)
 
-	select_button.pressed.connect(_on_tool_changed.bind(PaintTool.SEL))
 	draw_button.pressed.connect(_on_tool_changed.bind(PaintTool.DRAW))
 
 	layer_highlight.icon = get_theme_icon("TileMapHighlightSelected", "EditorIcons")
@@ -98,6 +103,7 @@ func _ready() -> void:
 	line_button.pressed.connect(_on_tool_changed.bind(PaintTool.LINE))
 	rect_button.pressed.connect(_on_tool_changed.bind(PaintTool.RECT))
 	fill_button.pressed.connect(_on_tool_changed.bind(PaintTool.BUCKET))
+	select_button.pressed.connect(_on_tool_changed.bind(PaintTool.SEL))
 	pick_button.pressed.connect(_on_tool_changed.bind(PaintTool.PICK))
 	erase_button.pressed.connect(_on_tool_changed.bind(PaintTool.ERASE))
 	erase_all_button.pressed.connect(_on_erase_all)
@@ -107,7 +113,7 @@ func _ready() -> void:
 	layer_grid.toggled.connect(_on_layer_grid_toggled)
 
 	draw_button.button_pressed = true
-	_tool_buttons = [null, select_button, draw_button, line_button, rect_button, fill_button, pick_button, erase_button]
+	_tool_buttons = [null, draw_button, line_button, rect_button, fill_button, select_button, pick_button, erase_button]
 	for btn in _tool_buttons:
 		if btn:
 			btn.toggled.connect(_on_tool_toggled)
@@ -161,7 +167,6 @@ func _on_tool_changed(tool: PaintTool) -> void:
 	if paint_tool != PaintTool.PICK and paint_tool != PaintTool.SEL:
 		_prev_tool = paint_tool
 	if _drag_type == DragType.MOVE:
-		push_warning("[SEL] TOOL_CHANGE restoring move cells")
 		_restore_move_cells()
 		update_overlay.emit()
 	_drag_type = DragType.NONE
@@ -293,6 +298,8 @@ func _on_entry_gui_input(event: InputEvent, panel: PanelContainer, index: int) -
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		selected_index = index
 		_update_selection_buttons()
+		if not _is_draw_tool():
+			_select_tool_button(PaintTool.DRAW)
 		_ensure_editor_select_mode()
 
 func _update_entry_style(panel: PanelContainer, selected: bool) -> void:
@@ -503,9 +510,13 @@ func canvas_input(event: InputEvent) -> bool:
 		return false
 	if not tileset:
 		return false
+
+	if event is InputEventKey:
+		return _handle_key_event(event)
+
 	if not event is InputEventMouse:
 		return false
-	if not _is_editor_select_mode():
+	if not _is_editor_select_mode() and _drag_type != DragType.CLIPBOARD_PASTE:
 		return false
 	if event is InputEventMouseButton:
 		if event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN, MOUSE_BUTTON_WHEEL_LEFT, MOUSE_BUTTON_WHEEL_RIGHT]:
@@ -534,10 +545,10 @@ func canvas_input(event: InputEvent) -> bool:
 	if released:
 		if event.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]:
 			_held_button_count = maxi(0, _held_button_count - 1)
-			push_warning("[SEL] RELEASE bt=" + str(event.button_index) + " held=" + str(_held_button_count) + " md=" + str(mouse_down) + " dt=" + str(_drag_type))
+		if _drag_type == DragType.CLIPBOARD_PASTE:
+			return true
 		if paint_tool == PaintTool.SEL:
 			if mouse_down and _held_button_count == 0:
-				push_warning("[SEL] COMMIT dt=" + str(_drag_type))
 				mouse_down = false
 				if _drag_type == DragType.SELECT:
 					_commit_selection()
@@ -558,9 +569,16 @@ func canvas_input(event: InputEvent) -> bool:
 		return true
 
 	if clicked:
+		if _drag_type == DragType.CLIPBOARD_PASTE:
+			if event.button_index == MOUSE_BUTTON_LEFT:
+				_commit_paste()
+			else:
+				_drag_type = DragType.NONE
+				update_overlay.emit()
+			return true
+
 		if event.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]:
 			_held_button_count += 1
-			push_warning("[SEL] CLICK bt=" + str(event.button_index) + " held=" + str(_held_button_count) + " md=" + str(mouse_down))
 		if paint_tool == PaintTool.SEL:
 			if event.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT] and not mouse_down:
 				if _selection.has(mouse_current):
@@ -760,6 +778,10 @@ func canvas_draw(overlay: Control) -> void:
 	if not _is_tilemap_editable() or not tileset:
 		return
 	_draw_our_grid(overlay)
+
+	if _drag_type == DragType.CLIPBOARD_PASTE and _clipboard and not _clipboard.is_empty():
+		_draw_paste_preview(overlay)
+		return
 
 	if paint_tool == PaintTool.SEL:
 		if _drag_type == DragType.SELECT and mouse_down:
@@ -1151,7 +1173,6 @@ func _draw_move_preview(offset: Vector2i, overlay: Control) -> void:
 
 func _commit_selection() -> void:
 	var rect := Rect2i(mouse_start, mouse_current - mouse_start).abs()
-	push_warning("[SEL] COMMIT_SELECT rect=(%d,%d %dx%d)" % [rect.position.x, rect.position.y, rect.size.x, rect.size.y])
 	_selection.clear()
 	for x in range(rect.position.x, rect.position.x + rect.size.x + 1):
 		for y in range(rect.position.y, rect.position.y + rect.size.y + 1):
@@ -1161,7 +1182,6 @@ func _commit_selection() -> void:
 	_drag_type = DragType.NONE
 
 func _start_move(mouse_pos: Vector2i) -> void:
-	push_warning("[SEL] START_MOVE sel_size=%d pos=(%d,%d)" % [_selection.size(), mouse_pos.x, mouse_pos.y])
 	_drag_type = DragType.MOVE
 	mouse_down = true
 	mouse_start = mouse_pos
@@ -1180,7 +1200,6 @@ func _start_move(mouse_pos: Vector2i) -> void:
 	update_overlay.emit()
 
 func _restore_move_cells() -> void:
-	push_warning("[SEL] RESTORE_MOVE count=%d" % _drag_modified.size())
 	for c in _drag_modified:
 		var data: Dictionary = _drag_modified[c]
 		if data.has_cell:
@@ -1188,7 +1207,6 @@ func _restore_move_cells() -> void:
 	_drag_modified.clear()
 
 func _commit_move() -> void:
-	push_warning("[SEL] COMMIT_MOVE modified=%d offset=(%d,%d)" % [_drag_modified.size(), mouse_current.x - mouse_start.x, mouse_current.y - mouse_start.y])
 	if _drag_modified.is_empty() or not undo_manager:
 		_drag_type = DragType.NONE
 		mouse_down = false
@@ -1264,3 +1282,126 @@ func _set_selection(arr: Array) -> void:
 	for v in arr:
 		_selection[v] = true
 	update_overlay.emit()
+
+# ---- CLIPBOARD (CUT / COPY / PASTE) ----
+
+func _handle_key_event(event: InputEventKey) -> bool:
+	if not event.pressed or event.echo:
+		return false
+
+	if event.keycode == KEY_ESCAPE and _drag_type == DragType.CLIPBOARD_PASTE:
+		_drag_type = DragType.NONE
+		update_overlay.emit()
+		return true
+
+	if not event.is_command_or_control_pressed():
+		return false
+
+	match event.keycode:
+		KEY_C:
+			_do_copy()
+			return true
+		KEY_X:
+			_do_cut()
+			return true
+		KEY_V:
+			_do_paste()
+			return true
+	return false
+
+func _do_copy() -> void:
+	if _selection.is_empty():
+		return
+	var coords: Array[Vector2i] = []
+	for c in _selection:
+		coords.append(c)
+	_clipboard = tilemap.get_pattern(coords)
+
+func _do_cut() -> void:
+	if _selection.is_empty():
+		return
+	_do_copy()
+	if not undo_manager:
+		return
+	var saved := _save_cells(_selection.keys())
+	var old_selection := _selection.keys()
+	undo_manager.create_action("Cut Tiles", UndoRedo.MERGE_DISABLE, tilemap)
+	for c in _selection:
+		undo_manager.add_do_method(tilemap, "erase_cell", c)
+	undo_manager.add_undo_method(self, "_restore_cells", saved, tilemap)
+	undo_manager.add_undo_method(self, "_set_selection", old_selection)
+	_selection.clear()
+	undo_manager.add_do_method(self, "_set_selection", _selection.keys())
+	undo_manager.commit_action()
+	update_overlay.emit()
+
+func _do_paste() -> void:
+	if not _clipboard or _clipboard.is_empty():
+		return
+	if _drag_type != DragType.NONE:
+		return
+	_drag_type = DragType.CLIPBOARD_PASTE
+	update_overlay.emit()
+
+func _commit_paste() -> void:
+	if not _clipboard or _clipboard.is_empty() or not undo_manager:
+		_drag_type = DragType.NONE
+		return
+
+	var pattern_size := _clipboard.get_size()
+	var cell_size := tileset.tile_size
+	var center_offset := (Vector2(pattern_size) / 2.0 - Vector2(0.5, 0.5)) * Vector2(cell_size)
+	var mouse_local: Vector2 = tilemap.map_to_local(mouse_current)
+	var pattern_pos := tilemap.local_to_map(mouse_local - center_offset)
+
+	var used_cells := _clipboard.get_used_cells()
+	var saved := {}
+	for coord in used_cells:
+		var world_cell := pattern_pos + coord
+		var src := tilemap.get_cell_source_id(world_cell)
+		saved[world_cell] = {
+			"has_cell": src != -1,
+			"source_id": src if src != -1 else 0,
+			"atlas_coords": tilemap.get_cell_atlas_coords(world_cell) if src != -1 else Vector2i.ZERO,
+			"alternative_tile": tilemap.get_cell_alternative_tile(world_cell) if src != -1 else 0,
+		}
+
+	undo_manager.create_action("Paste Tiles", UndoRedo.MERGE_DISABLE, tilemap)
+	for coord in used_cells:
+		var world_cell := pattern_pos + coord
+		undo_manager.add_do_method(tilemap, "set_cell", world_cell,
+			_clipboard.get_cell_source_id(coord),
+			_clipboard.get_cell_atlas_coords(coord),
+			_clipboard.get_cell_alternative_tile(coord))
+	undo_manager.add_undo_method(self, "_restore_cells", saved, tilemap)
+	undo_manager.commit_action()
+
+	_drag_type = DragType.NONE
+	update_overlay.emit()
+
+func _draw_paste_preview(overlay: Control) -> void:
+	var tform := _canvas_tilemap_transform()
+	var cell_size := tileset.tile_size
+	var half := Vector2(cell_size) / 2.0
+	var polygon := PackedVector2Array([Vector2(-0.5, -0.5), Vector2(0.5, -0.5), Vector2(0.5, 0.5), Vector2(-0.5, 0.5)])
+
+	var pattern_size := _clipboard.get_size()
+	var center_offset := (Vector2(pattern_size) / 2.0 - Vector2(0.5, 0.5)) * Vector2(cell_size)
+	var mouse_local: Vector2 = tilemap.map_to_local(mouse_current)
+	var pattern_pos := tilemap.local_to_map(mouse_local - center_offset)
+
+	for coord in _clipboard.get_used_cells():
+		var world_cell: Vector2i = pattern_pos + coord
+		var source_id: int = _clipboard.get_cell_source_id(coord)
+		var source := tileset.get_source(source_id) as TileSetAtlasSource
+		if source and source.texture:
+			var atlas_coords := _clipboard.get_cell_atlas_coords(coord)
+			var alt := _clipboard.get_cell_alternative_tile(coord)
+			var region := source.get_tile_texture_region(atlas_coords, alt)
+			var center := tilemap.map_to_local(world_cell)
+			var top_left := tform * (center - half)
+			var bottom_right := tform * (center + half)
+			overlay.draw_texture_rect_region(source.texture, Rect2(top_left, bottom_right - top_left), region, Color(1, 1, 1, 0.5))
+		else:
+			var cell_transform := Transform2D(0.0, cell_size, 0.0, tilemap.map_to_local(world_cell))
+			overlay.draw_colored_polygon(tform * cell_transform * polygon, Color(1, 1, 1, 0.25))
