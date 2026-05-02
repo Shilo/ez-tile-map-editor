@@ -8,6 +8,7 @@ var _overlay: Control
 
 
 const DEFAULT_INPUT_BINDINGS := {
+	"ez_tile_select": KEY_S,
 	"ez_tile_draw": KEY_D,
 	"ez_tile_line": KEY_L,
 	"ez_tile_rect": KEY_R,
@@ -93,13 +94,7 @@ func _re_show() -> void:
 	if _button and _button.button_pressed:
 		make_bottom_panel_item_visible(_panel)
 		_panel.about_to_be_visible()
-		_re_show2.call_deferred()
 
-
-func _re_show2() -> void:
-	if _button and _button.button_pressed:
-		make_bottom_panel_item_visible(_panel)
-		_panel.about_to_be_visible()
 
 
 func _clear() -> void:

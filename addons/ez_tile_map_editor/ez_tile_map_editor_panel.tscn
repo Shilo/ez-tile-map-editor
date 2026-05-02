@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3 uid="uid://cez_tile_map_editor_panel"]
+[gd_scene load_steps=16 format=3 uid="uid://cez_tile_map_editor_panel"]
 
 [ext_resource type="Script" path="res://addons/ez_tile_map_editor/ez_tile_map_editor_panel.gd" id="1_panel"]
 
@@ -40,6 +40,12 @@ action = "ez_tile_erase"
 [sub_resource type="Shortcut" id="shortcut_erase"]
 events = [SubResource("action_erase")]
 
+[sub_resource type="InputEventAction" id="action_select"]
+action = "ez_tile_select"
+
+[sub_resource type="Shortcut" id="shortcut_select"]
+events = [SubResource("action_select")]
+
 [node name="EZTileMapEditorPanel" type="Control"]
 custom_minimum_size = Vector2(0, 120)
 layout_mode = 3
@@ -62,6 +68,15 @@ grow_vertical = 2
 
 [node name="Toolbar" type="HBoxContainer" parent="VBoxContainer"]
 layout_mode = 2
+
+[node name="Select" type="Button" parent="VBoxContainer/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Selection Tool (S)"
+toggle_mode = true
+shortcut = SubResource("shortcut_select")
+button_group = SubResource("draw_group")
+flat = true
 
 [node name="Draw" type="Button" parent="VBoxContainer/Toolbar"]
 unique_name_in_owner = true

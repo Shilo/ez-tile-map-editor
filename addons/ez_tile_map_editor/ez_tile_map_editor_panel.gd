@@ -3,13 +3,14 @@ extends Control
 
 signal update_overlay
 
-enum PaintTool { NONE, DRAW, LINE, RECT, BUCKET, PICK, ERASE }
+enum PaintTool { NONE, DRAW, LINE, RECT, BUCKET, PICK, ERASE, SEL }
 
 @onready var draw_button: Button = %Draw
 @onready var line_button: Button = %Line
 @onready var rect_button: Button = %Rect
 @onready var fill_button: Button = %Fill
 @onready var pick_button: Button = %Pick
+@onready var select_button: Button = %Select
 @onready var erase_button: Button = %Erase
 @onready var erase_all_button: Button = %EraseAll
 
@@ -57,6 +58,7 @@ var mouse_start: Vector2i = Vector2i.ZERO
 var mouse_current: Vector2i = Vector2i.ZERO
 var mouse_prev: Vector2i = Vector2i.ZERO
 var drag_erasing: bool = false
+var selection_rect: Rect2i = Rect2i()
 var drag_action_index: int = 0
 var drag_action_count: int = 0
 var plugin: EditorPlugin = null
@@ -66,6 +68,7 @@ var _native_highlight_button: BaseButton = null
 var _syncing_native: bool = false
 
 func _ready() -> void:
+	select_button.icon = get_theme_icon("ToolSelect", "EditorIcons")
 	draw_button.icon = get_theme_icon("Edit", "EditorIcons")
 	line_button.icon = get_theme_icon("Line", "EditorIcons")
 	rect_button.icon = get_theme_icon("Rectangle", "EditorIcons")
@@ -75,9 +78,7 @@ func _ready() -> void:
 	erase_all_button.icon = get_theme_icon("Clear", "EditorIcons")
 	erase_all_button.self_modulate = Color(1.0, 0.3, 0.3, 1.0)
 
-	layer_highlight.icon = get_theme_icon("TileMapHighlightSelected", "EditorIcons")
-	layer_grid.icon = get_theme_icon("Grid", "EditorIcons")
-
+	select_button.pressed.connect(_on_tool_changed.bind(PaintTool.SEL))
 	draw_button.pressed.connect(_on_tool_changed.bind(PaintTool.DRAW))
 	line_button.pressed.connect(_on_tool_changed.bind(PaintTool.LINE))
 	rect_button.pressed.connect(_on_tool_changed.bind(PaintTool.RECT))
@@ -91,7 +92,7 @@ func _ready() -> void:
 	layer_grid.toggled.connect(_on_layer_grid_toggled)
 
 	draw_button.button_pressed = true
-	_tool_buttons = [null, draw_button, line_button, rect_button, fill_button, pick_button, erase_button]
+	_tool_buttons = [null, draw_button, line_button, rect_button, fill_button, pick_button, erase_button, select_button]
 	_update_empty_state()
 
 func _is_tilemap_editable() -> bool:
@@ -123,15 +124,16 @@ func _update_tool_buttons() -> void:
 	rect_button.disabled = not editable
 	fill_button.disabled = not editable
 	pick_button.disabled = not editable
-	_update_erase_buttons()
+	select_button.disabled = not editable
 
 func _on_tilemap_visibility_changed() -> void:
 	_update_empty_state.call_deferred()
 
 func _on_tool_changed(tool: PaintTool) -> void:
-	if paint_tool != PaintTool.PICK:
+	if paint_tool != PaintTool.PICK and paint_tool != PaintTool.SEL:
 		_prev_tool = paint_tool
 	paint_tool = tool
+	selection_rect = Rect2i()
 
 func _select_tool_button(tool: PaintTool) -> void:
 	paint_tool = tool
@@ -279,11 +281,7 @@ func _update_selection_buttons() -> void:
 		_update_entry_style(panel, i == selected_index)
 
 func _update_erase_buttons() -> void:
-	var editable := _is_tilemap_editable()
-	var has_tiles := tilemap != null and tilemap.get_used_cells().size() > 0
-
-	erase_button.disabled = not editable or not has_tiles
-	erase_all_button.disabled = not editable or not has_tiles
+	pass
 
 func _update_layer_dropdown() -> void:
 	layer_select.clear()
@@ -462,6 +460,8 @@ func canvas_input(event: InputEvent) -> bool:
 		return false
 	if not event is InputEventMouse:
 		return false
+	if not _is_editor_select_mode():
+		return false
 	if event is InputEventMouseButton:
 		if event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN, MOUSE_BUTTON_WHEEL_LEFT, MOUSE_BUTTON_WHEEL_RIGHT]:
 			return false
@@ -492,12 +492,24 @@ func canvas_input(event: InputEvent) -> bool:
 		mouse_down = false
 		if paint_tool == PaintTool.LINE or paint_tool == PaintTool.RECT:
 			_commit_paint_action()
+		elif paint_tool == PaintTool.SEL:
+			selection_rect = Rect2i(mouse_start, mouse_current - mouse_start).abs()
 		drag_erasing = false
 		draw_overlay = false
 		update_overlay.emit()
 		return true
 
 	if clicked:
+		if paint_tool == PaintTool.SEL:
+			if event.button_index == MOUSE_BUTTON_LEFT:
+				mouse_down = true
+				mouse_start = mouse_current
+				mouse_prev = mouse_current
+				selection_rect = Rect2i()
+				draw_overlay = true
+				update_overlay.emit()
+			return true
+
 		if event.button_index == MOUSE_BUTTON_RIGHT:
 			drag_erasing = true
 		elif event.button_index == MOUSE_BUTTON_LEFT:
@@ -683,6 +695,34 @@ func canvas_draw(overlay: Control) -> void:
 	if not _is_tilemap_editable() or not tileset:
 		return
 	_draw_our_grid(overlay)
+
+	if paint_tool == PaintTool.SEL:
+		var sel := selection_rect
+		if mouse_down:
+			sel = Rect2i(mouse_start, mouse_current - mouse_start).abs()
+		if sel.has_area():
+			var transform := _canvas_tilemap_transform()
+			var cell_size := tileset.tile_size
+			var color := Color(0.2, 0.6, 1.0, 0.4)
+			var outline_color := Color(0.3, 0.7, 1.0, 0.8)
+			for x in range(sel.position.x, sel.position.x + sel.size.x):
+				for y in range(sel.position.y, sel.position.y + sel.size.y):
+					var c := Vector2i(x, y)
+					var center := tilemap.map_to_local(c)
+					var half := Vector2(cell_size) / 2.0
+					var top_left := transform * (center - half)
+					var top_right := transform * (center + Vector2(half.x, -half.y))
+					var bottom_right := transform * (center + half)
+					var bottom_left := transform * (center + Vector2(-half.x, half.y))
+					overlay.draw_rect(Rect2(top_left, bottom_right - top_left), color)
+					overlay.draw_line(top_left, top_right, outline_color, -1.0, false)
+					overlay.draw_line(top_right, bottom_right, outline_color, -1.0, false)
+					overlay.draw_line(bottom_right, bottom_left, outline_color, -1.0, false)
+					overlay.draw_line(bottom_left, top_left, outline_color, -1.0, false)
+		if not mouse_down:
+			return
+		return
+
 	if not draw_overlay:
 		return
 	if not mouse_down:
@@ -949,3 +989,18 @@ func _await_dialog(dialog: AcceptDialog) -> bool:
 	dialog.canceled.connect(dialog.hide)
 	await dialog.visibility_changed
 	return confirmed
+
+func _is_editor_select_mode() -> bool:
+	var editor_base := EditorInterface.get_base_control()
+	return _find_select_mode_pressed(editor_base)
+
+func _find_select_mode_pressed(node: Node) -> bool:
+	for child in node.get_children():
+		if child is BaseButton:
+			var btn: BaseButton = child
+			var tt := btn.tooltip_text
+			if tt and tt.begins_with("Select Mode"):
+				return btn.button_pressed
+		if _find_select_mode_pressed(child):
+			return true
+	return false
