@@ -236,6 +236,7 @@ func _on_tilemap_visibility_changed() -> void:
 func _on_tool_changed(tool: PaintTool) -> void:
 	if paint_tool != PaintTool.PICK and paint_tool != PaintTool.SEL:
 		_prev_tool = paint_tool
+	_quick_source_tool = PaintTool.NONE
 	if _drag_type == DragType.MOVE:
 		_restore_move_cells()
 		update_overlay.emit()
@@ -658,6 +659,16 @@ func canvas_input(event: InputEvent) -> bool:
 				draw_overlay = false
 				update_overlay.emit()
 			return true
+		if event.button_index == MOUSE_BUTTON_LEFT and _quick_source_tool != PaintTool.NONE:
+			if mouse_down:
+				if paint_tool == PaintTool.LINE or paint_tool == PaintTool.RECT:
+					_commit_paint_action()
+			_exit_quick_tool()
+			if _held_button_count == 0:
+				mouse_down = false
+				draw_overlay = false
+				update_overlay.emit()
+			return true
 		if _drag_type == DragType.CLIPBOARD_PASTE:
 			return true
 		if paint_tool == PaintTool.SEL:
@@ -706,13 +717,17 @@ func canvas_input(event: InputEvent) -> bool:
 		if event.button_index == MOUSE_BUTTON_RIGHT:
 			_enter_quick_tool(PaintTool.ERASE)
 		elif event.button_index == MOUSE_BUTTON_LEFT:
-			pass
+			if event.shift_pressed and not event.is_command_or_control_pressed() and not event.alt_pressed:
+				_enter_quick_tool(PaintTool.RECT)
+			elif event.is_command_or_control_pressed() and not event.shift_pressed and not event.alt_pressed:
+				_enter_quick_tool(PaintTool.LINE)
+			elif event.alt_pressed and not event.shift_pressed and not event.is_command_or_control_pressed():
+				_enter_quick_tool(PaintTool.PICK)
+				_pick_at_mouse()
+				_exit_quick_tool()
+				return true
 		else:
 			return false
-
-		if event.is_command_or_control_pressed() and not event.shift_pressed and event.button_index == MOUSE_BUTTON_LEFT:
-			_pick_at_mouse()
-			return true
 
 		if paint_tool == PaintTool.PICK and event.button_index == MOUSE_BUTTON_LEFT:
 			if _pick_at_mouse():
