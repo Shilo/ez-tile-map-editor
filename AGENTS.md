@@ -16,3 +16,43 @@ Tile atlas (source 1): `tiles/stone.png`
 Project icon: `icon.svg`
 MCP server: `.mcp.json`
 OpenCode config: `opencode.json`
+
+## Testing Protocol
+
+After every code change, validate by running a **temporary headless Godot instance** and checking the output for script errors, parse errors, and warnings.
+
+### Godot executable
+
+The Godot editor executable path can be found from any running Godot process:
+
+```powershell
+$godotExe = (Get-Process -Name "Godot*" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Path)
+```
+
+### Headless validation command
+
+```powershell
+& $godotExe --editor --headless --path "<project_dir>" --quit 2>&1 | Select-Object -First 200
+```
+
+- `--editor` — loads editor plugins
+- `--headless` — no GUI window
+- `--quit` — exits after loading
+- `2>&1` — captures stderr merged with stdout
+
+### What to check
+
+| Pattern | Meaning |
+|---|---|
+| `SCRIPT ERROR: Parse Error` | GDScript syntax or type inference failure — **must fix** |
+| `SCRIPT ERROR:` | Runtime error during plugin init — **must fix** |
+| `ERROR:` | Engine-level error (missing files, UIDs, etc.) |
+| Warnings | Less critical but investigate |
+
+### Editor instance policy
+
+**Never** open a new headed editor instance. Either:
+- Re-launch the current headed instance, or
+- Use the already-running headed instance
+
+Pre-existing errors unrelated to your changes can be noted but should not block progress.

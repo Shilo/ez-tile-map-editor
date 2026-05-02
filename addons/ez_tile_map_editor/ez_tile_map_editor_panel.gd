@@ -4,6 +4,7 @@ extends Control
 signal update_overlay
 
 enum PaintTool { NONE, SEL, DRAW, LINE, RECT, BUCKET, PICK, ERASE }
+enum DragType { NONE, SELECT, MOVE }
 
 @onready var draw_button: Button = %Draw
 @onready var line_button: Button = %Line
@@ -31,6 +32,10 @@ var tilemap: TileMapLayer = null:
 			if not tilemap.visibility_changed.is_connected(_on_tilemap_visibility_changed):
 				tilemap.visibility_changed.connect(_on_tilemap_visibility_changed)
 		tileset = v.tile_set if v else null
+		_selection.clear()
+		_drag_type = DragType.NONE
+		_drag_modified.clear()
+		mouse_down = false
 		_update_layer_dropdown.call_deferred()
 		_update_erase_buttons.call_deferred()
 
@@ -61,6 +66,9 @@ var drag_erasing: bool = false
 var selection_rect: Rect2i = Rect2i()
 var drag_action_index: int = 0
 var drag_action_count: int = 0
+var _selection: Dictionary = {}
+var _drag_type: int = DragType.NONE
+var _drag_modified: Dictionary = {}
 var plugin: EditorPlugin = null
 var _native_tilemap_editor: Object = null
 var _native_grid_button: BaseButton = null
@@ -77,6 +85,8 @@ func _ready() -> void:
 	erase_button.icon = get_theme_icon("Eraser", "EditorIcons")
 	erase_all_button.icon = get_theme_icon("Clear", "EditorIcons")
 	erase_all_button.self_modulate = Color(1.0, 0.3, 0.3, 1.0)
+
+	visibility_changed.connect(_on_visibility_changed)
 
 	select_button.pressed.connect(_on_tool_changed.bind(PaintTool.SEL))
 	draw_button.pressed.connect(_on_tool_changed.bind(PaintTool.DRAW))
@@ -101,6 +111,15 @@ func _ready() -> void:
 			btn.toggled.connect(_on_tool_toggled)
 	_update_empty_state()
 	_on_tool_toggled(false)
+
+func _on_visibility_changed() -> void:
+	if not visible:
+		if _drag_type == DragType.MOVE:
+			_restore_move_cells()
+		_drag_type = DragType.NONE
+		mouse_down = false
+		draw_overlay = false
+		update_overlay.emit()
 
 func _is_tilemap_editable() -> bool:
 	return tilemap != null and tilemap.is_visible_in_tree()
@@ -139,6 +158,14 @@ func _on_tilemap_visibility_changed() -> void:
 func _on_tool_changed(tool: PaintTool) -> void:
 	if paint_tool != PaintTool.PICK and paint_tool != PaintTool.SEL:
 		_prev_tool = paint_tool
+	if _drag_type == DragType.MOVE:
+		_restore_move_cells()
+		update_overlay.emit()
+	_drag_type = DragType.NONE
+	if tool != PaintTool.SEL:
+		_selection.clear()
+	mouse_down = false
+	draw_overlay = false
 	paint_tool = tool
 	selection_rect = Rect2i()
 	_ensure_editor_select_mode()
@@ -501,13 +528,23 @@ func canvas_input(event: InputEvent) -> bool:
 	var clicked: bool = event is InputEventMouseButton and event.pressed
 
 	if released:
+		if paint_tool == PaintTool.SEL:
+			if _drag_type == DragType.SELECT and mouse_down:
+				mouse_down = false
+				_commit_selection()
+				draw_overlay = false
+				update_overlay.emit()
+				return true
+			elif _drag_type == DragType.MOVE:
+				_commit_move()
+				draw_overlay = false
+				update_overlay.emit()
+				return true
 		if not mouse_down:
 			return false
 		mouse_down = false
 		if paint_tool == PaintTool.LINE or paint_tool == PaintTool.RECT:
 			_commit_paint_action()
-		elif paint_tool == PaintTool.SEL:
-			selection_rect = Rect2i(mouse_start, mouse_current - mouse_start).abs()
 		drag_erasing = false
 		draw_overlay = false
 		update_overlay.emit()
@@ -516,12 +553,16 @@ func canvas_input(event: InputEvent) -> bool:
 	if clicked:
 		if paint_tool == PaintTool.SEL:
 			if event.button_index == MOUSE_BUTTON_LEFT:
-				mouse_down = true
-				mouse_start = mouse_current
-				mouse_prev = mouse_current
-				selection_rect = Rect2i()
-				draw_overlay = true
-				update_overlay.emit()
+				if _selection.has(mouse_current):
+					_start_move(mouse_current)
+				else:
+					_drag_type = DragType.SELECT
+					mouse_down = true
+					mouse_start = mouse_current
+					mouse_prev = mouse_current
+					selection_rect = Rect2i()
+					draw_overlay = true
+					update_overlay.emit()
 			return true
 
 		if event.button_index == MOUSE_BUTTON_RIGHT:
@@ -711,30 +752,22 @@ func canvas_draw(overlay: Control) -> void:
 	_draw_our_grid(overlay)
 
 	if paint_tool == PaintTool.SEL:
-		var sel := selection_rect
-		if mouse_down:
-			sel = Rect2i(mouse_start, mouse_current - mouse_start).abs()
-		if sel.has_area():
-			var transform := _canvas_tilemap_transform()
-			var cell_size := tileset.tile_size
-			var color := Color(0.2, 0.6, 1.0, 0.4)
-			var outline_color := Color(0.3, 0.7, 1.0, 0.8)
-			for x in range(sel.position.x, sel.position.x + sel.size.x):
-				for y in range(sel.position.y, sel.position.y + sel.size.y):
-					var c := Vector2i(x, y)
-					var center := tilemap.map_to_local(c)
-					var half := Vector2(cell_size) / 2.0
-					var top_left := transform * (center - half)
-					var top_right := transform * (center + Vector2(half.x, -half.y))
-					var bottom_right := transform * (center + half)
-					var bottom_left := transform * (center + Vector2(-half.x, half.y))
-					overlay.draw_rect(Rect2(top_left, bottom_right - top_left), color)
-					overlay.draw_line(top_left, top_right, outline_color, -1.0, false)
-					overlay.draw_line(top_right, bottom_right, outline_color, -1.0, false)
-					overlay.draw_line(bottom_right, bottom_left, outline_color, -1.0, false)
-					overlay.draw_line(bottom_left, top_left, outline_color, -1.0, false)
-		if not mouse_down:
-			return
+		if _drag_type == DragType.SELECT and mouse_down:
+			var sel := Rect2i(mouse_start, mouse_current - mouse_start).abs()
+			sel.size += Vector2i(1, 1)
+			if sel.has_area():
+				_draw_cells_filled(sel, Color(0.2, 0.6, 1.0, 0.3), overlay)
+				var to_draw: Dictionary = {}
+				for x in range(sel.position.x, sel.position.x + sel.size.x):
+					for y in range(sel.position.y, sel.position.y + sel.size.y):
+						var c := Vector2i(x, y)
+						if tilemap.get_cell_source_id(c) != -1:
+							to_draw[c] = true
+				_draw_cells_outline(to_draw, Color(0.3, 0.7, 1.0, 1.0), overlay)
+		elif _drag_type == DragType.MOVE and mouse_down:
+			_draw_move_preview(mouse_current - mouse_start, overlay)
+		elif not _selection.is_empty():
+			_draw_cells_outline(_selection, Color(0.3, 0.7, 1.0, 1.0), overlay)
 		return
 
 	if not draw_overlay:
@@ -1051,3 +1084,154 @@ func _find_first_toggle_in(node: Node) -> BaseButton:
 		if found:
 			return found
 	return null
+
+# ---- SELECTION TOOL ----
+
+func _draw_cells_outline(cells: Dictionary, color: Color, overlay: Control) -> void:
+	var tform := _canvas_tilemap_transform()
+	var cell_size := tileset.tile_size
+	var half := Vector2(cell_size) / 2.0
+	for c in cells:
+		var center := tilemap.map_to_local(c)
+		var tl := tform * (center - half)
+		var tr := tform * (center + Vector2(half.x, -half.y))
+		var br := tform * (center + half)
+		var bl := tform * (center + Vector2(-half.x, half.y))
+
+		if not cells.has(c + Vector2i.RIGHT):
+			overlay.draw_line(tr, br, color)
+		if not cells.has(c + Vector2i.DOWN):
+			overlay.draw_line(br, bl, color)
+		if not cells.has(c + Vector2i.LEFT):
+			overlay.draw_line(bl, tl, color)
+		if not cells.has(c + Vector2i.UP):
+			overlay.draw_line(tl, tr, color)
+
+func _draw_cells_filled(rect: Rect2i, color: Color, overlay: Control) -> void:
+	var tform := _canvas_tilemap_transform()
+	var cell_size := tileset.tile_size
+	var polygon := PackedVector2Array([Vector2(-0.5, -0.5), Vector2(0.5, -0.5), Vector2(0.5, 0.5), Vector2(-0.5, 0.5)])
+	for x in range(rect.position.x, rect.position.x + rect.size.x):
+		for y in range(rect.position.y, rect.position.y + rect.size.y):
+			var cell_transform := Transform2D(0.0, cell_size, 0.0, tilemap.map_to_local(Vector2i(x, y)))
+			overlay.draw_colored_polygon(tform * cell_transform * polygon, color)
+
+func _draw_move_preview(offset: Vector2i, overlay: Control) -> void:
+	var tform := _canvas_tilemap_transform()
+	var cell_size := tileset.tile_size
+	var polygon := PackedVector2Array([Vector2(-0.5, -0.5), Vector2(0.5, -0.5), Vector2(0.5, 0.5), Vector2(-0.5, 0.5)])
+	for c in _drag_modified:
+		var new_cell: Vector2i = c + offset
+		var cell_transform := Transform2D(0.0, cell_size, 0.0, tilemap.map_to_local(new_cell))
+		overlay.draw_colored_polygon(tform * cell_transform * polygon, Color(1.0, 1.0, 1.0, 0.3))
+
+func _commit_selection() -> void:
+	var rect := Rect2i(mouse_start, mouse_current - mouse_start).abs()
+	_selection.clear()
+	for x in range(rect.position.x, rect.position.x + rect.size.x + 1):
+		for y in range(rect.position.y, rect.position.y + rect.size.y + 1):
+			var c := Vector2i(x, y)
+			if tilemap.get_cell_source_id(c) != -1:
+				_selection[c] = true
+	_drag_type = DragType.NONE
+
+func _start_move(mouse_pos: Vector2i) -> void:
+	_drag_type = DragType.MOVE
+	mouse_down = true
+	mouse_start = mouse_pos
+	mouse_prev = mouse_pos
+	_drag_modified.clear()
+	for c in _selection:
+		var src := tilemap.get_cell_source_id(c)
+		_drag_modified[c] = {
+			"has_cell": src != -1,
+			"source_id": src,
+			"atlas_coords": tilemap.get_cell_atlas_coords(c) if src != -1 else Vector2i.ZERO,
+			"alternative_tile": tilemap.get_cell_alternative_tile(c) if src != -1 else 0,
+		}
+		tilemap.erase_cell(c)
+	draw_overlay = true
+	update_overlay.emit()
+
+func _restore_move_cells() -> void:
+	for c in _drag_modified:
+		var data: Dictionary = _drag_modified[c]
+		if data.has_cell:
+			tilemap.set_cell(c, data.source_id, data.atlas_coords, data.alternative_tile)
+	_drag_modified.clear()
+
+func _commit_move() -> void:
+	if _drag_modified.is_empty() or not undo_manager:
+		_drag_type = DragType.NONE
+		mouse_down = false
+		return
+
+	var offset := mouse_current - mouse_start
+	if offset == Vector2i.ZERO:
+		_restore_move_cells()
+		_drag_type = DragType.NONE
+		mouse_down = false
+		return
+
+	var old_selection := _selection.keys()
+	var new_selection: Array[Vector2i] = []
+	for c in _drag_modified:
+		var dc: Dictionary = _drag_modified[c]
+		if dc.has_cell:
+			new_selection.append(c + offset)
+
+	undo_manager.create_action("Move Tiles", UndoRedo.MERGE_DISABLE, tilemap)
+
+	# DO: clear old positions, then set new positions, then update selection
+	for c in _drag_modified:
+		var dc: Dictionary = _drag_modified[c]
+		if dc.has_cell:
+			undo_manager.add_do_method(tilemap, "erase_cell", c)
+	for c in _drag_modified:
+		var dc: Dictionary = _drag_modified[c]
+		if dc.has_cell:
+			var new_cell: Vector2i = c + offset
+			undo_manager.add_do_method(tilemap, "set_cell", new_cell, dc.source_id, dc.atlas_coords, dc.alternative_tile)
+	undo_manager.add_do_method(self, "_set_selection", new_selection)
+
+	# UNDO: restore in reverse — selection, then what was at new positions, then clear new, then restore old
+	undo_manager.add_undo_method(self, "_set_selection", old_selection)
+	for c in _drag_modified:
+		var new_cell: Vector2i = c + offset
+		var orig_src: int = -1
+		var orig_atlas: Vector2i = Vector2i.ZERO
+		var orig_alt: int = 0
+		if _drag_modified.has(new_cell):
+			var d2: Dictionary = _drag_modified[new_cell]
+			orig_src = d2.source_id
+			orig_atlas = d2.atlas_coords
+			orig_alt = d2.alternative_tile
+		else:
+			orig_src = tilemap.get_cell_source_id(new_cell)
+			orig_atlas = tilemap.get_cell_atlas_coords(new_cell) if orig_src != -1 else Vector2i.ZERO
+			orig_alt = tilemap.get_cell_alternative_tile(new_cell) if orig_src != -1 else 0
+		if orig_src != -1:
+			undo_manager.add_undo_method(tilemap, "set_cell", new_cell, orig_src, orig_atlas, orig_alt)
+		else:
+			undo_manager.add_undo_method(tilemap, "erase_cell", new_cell)
+	for c in _drag_modified:
+		var du: Dictionary = _drag_modified[c]
+		if du.has_cell:
+			undo_manager.add_undo_method(tilemap, "set_cell", c, du.source_id, du.atlas_coords, du.alternative_tile)
+		else:
+			undo_manager.add_undo_method(tilemap, "erase_cell", c)
+
+	undo_manager.commit_action()
+
+	_selection.clear()
+	for c in new_selection:
+		_selection[c] = true
+	_drag_modified.clear()
+	_drag_type = DragType.NONE
+	mouse_down = false
+
+func _set_selection(arr: Array) -> void:
+	_selection.clear()
+	for v in arr:
+		_selection[v] = true
+	update_overlay.emit()
