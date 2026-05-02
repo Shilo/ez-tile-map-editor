@@ -15,3 +15,4 @@ Tile atlas (source 0): `tiles/ground.png`
 Tile atlas (source 1): `tiles/stone.png`
 Project icon: `icon.svg`
 MCP server: `.mcp.json`
+OpenCode config: `opencode.json`

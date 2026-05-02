@@ -1,37 +1,139 @@
 # EZ Tile Map Editor
 
-A Godot 4.6 editor plugin that makes terrain painting on TileMapLayer nodes intuitive and easy - pick a terrain, pick a tool, and paint directly in the viewport. Replaces the less user-friendly native TileSet bottom panel workflow with a focused, always-visible toolbar and terrain grid.
+A Godot 4.6 editor plugin that makes **terrain painting** on `TileMapLayer` nodes intuitive and fast — pick a terrain, choose a tool, and paint directly in the 2D viewport. Replaces the less user-friendly native TileSet bottom panel workflow with a focused, always-visible toolbar and terrain grid.
+
+> **Important:** This plugin works exclusively with **terrains** (terrain sets defined in your TileSet with configured peering bits). It is not a raw tile painter — if you need to place individual tiles, use the native Godot TileMap editor instead.
+
+---
 
 ## Features
 
-- Paint terrains with **Draw**, **Line**, **Rectangle**, and **Bucket Fill** tools
-- **Pick** terrain from existing cells (Ctrl+Click or Pick tool)
-- **Erase** individual cells or erase entire layers
-- **Right-click drag** to erase while painting
-- Terrain management: Add, rename, recolor, and remove terrains via the built-in TileSet bottom panel
-- **Layer switcher** — select between visible TileMapLayer nodes in the scene
-- **Layer highlight** and **grid visibility** toggles
-- Full **undo/redo** support for all paint and terrain operations
-- Canvas overlay preview while painting
+### Paint Tools
+| Tool | Shortcut | Description |
+|------|----------|-------------|
+| **Draw** | `D` | Freehand brush with continuous stroke support |
+| **Line** | `L` | Straight lines using Bresenham and tileset-aware algorithms |
+| **Rectangle** | `R` | Fill a rectangular region with the selected terrain |
+| **Bucket Fill** | `B` | Flood fill contiguous areas (BFS-based) |
+| **Pick** | `P` | Sample a terrain from an existing cell to select it |
+| **Erase** | `E` | Remove individual cells from the current layer |
+| **Select** | `S` | View-only mode; click to select terrain without painting |
+
+All tools support **undo/redo** with per-stroke merging, so a continuous drag is a single undo step.
+
+### Right-Click Erase
+Hold the right mouse button and drag to erase cells while using any paint tool — no need to switch tools mid-edit.
+
+### Quick Pick
+**Ctrl+Click** any painted cell in the viewport to instantly pick that cell's terrain.
+
+### Erase All
+Remove every used cell from the current layer in one click, with full undo support.
+
+### Terrain Grid
+A scrollable grid of terrain previews — each shows a tile icon from the atlas, the terrain name, and a selection highlight. Click to select a terrain, then paint. The grid auto-refreshes whenever you modify terrains via the native TileSet bottom panel.
+
+### Layer Switcher
+A dropdown in the toolbar lists all visible `TileMapLayer` nodes in the scene. Switch layers without leaving the viewport or hunting through the scene tree.
+
+### Layer Highlight & Grid Toggles
+- **Layer Highlight** — highlights the selected layer for visual clarity
+- **Grid** — toggles the tile grid overlay
+
+Both settings stay in sync with the native Godot TileMap editor.
+
+### Canvas Overlay
+A real-time preview is drawn over the 2D viewport while painting — colored polygon for the brush area, highlight outline for flood fill target, and dashed rectangle for selection.
+
+### Custom Grid Rendering
+- Viewport culling — only draws grid cells visible on screen
+- Scale fading — grid fades out when cells drop below 5px to avoid visual noise
+- Performance clamping — caps grid drawing at 100×100 cells
+- Edge fade-out — smooth fade on irregular layer edges
+
+---
 
 ## Installation
 
-1. Copy `addons/ez_tile_map_editor/` into your Godot project's `addons/` folder
-2. Enable the plugin at **Project > Project Settings > Plugins > EZ Tile Map Editor**
+1. Copy the `addons/ez_tile_map_editor/` folder into your Godot project's `addons/` directory
+2. Open your project in the Godot editor
+3. Go to **Project → Project Settings → Plugins**
+4. Find **EZ Tile Map Editor** and check **Enable**
 
-## Usage
+The plugin adds an **EZ TileMap** tab to the bottom panel.
 
-1. Open the **EZ TileMap** bottom panel tab
-2. Select a **TileMapLayer** node in the scene tree
-3. Make sure your TileSet has **terrains defined** (use the built-in TileSet bottom panel to set up terrains and paint peering bits)
-4. Choose a terrain from the grid and a paint tool from the toolbar
-5. Paint directly on the 2D viewport
+---
+
+## Quick Start
+
+### Prerequisites
+Your `TileSet` must have:
+- At least one **terrain set** defined
+- **Peering bits** configured for each tile (so Godot knows which tile to use at terrain boundaries)
+
+> If you're new to Godot terrains, see the official docs: [Using terrains in the TileSet editor](https://docs.godotengine.org/en/stable/tutorials/2d/using_tilemaps.html#creating-terrain-sets)
+
+### Painting Workflow
+1. Open the **TileSet** bottom panel and configure your terrain sets with peering bits
+2. Click the **EZ TileMap** tab in the bottom panel
+3. Select a `TileMapLayer` node in the scene tree (or use the layer dropdown in the toolbar)
+4. Click a terrain icon from the terrain grid to select it
+5. Choose a paint tool — press `D` for Draw, or click a tool button
+6. Click and drag in the 2D viewport to paint
+
+### Example: Grass & Stone Path
+1. Create a `TileMapLayer` node and assign a `TileSet` with two terrains: **Grass** and **Stone**
+2. Paint the entire layer with Grass (use `B` for Bucket Fill to fill quickly)
+3. Select the **Stone** terrain from the grid
+4. Press `D` and paint stone paths across the grass — tiles auto-transition along terrain boundaries based on your peering bits
+
+---
+
+## Tips
+
+- **Ctrl+Click** any cell to quick-pick its terrain without switching to the Pick tool
+- **Right-click + drag** to erase cells without switching to Erase mode
+- Use the **layer dropdown** (right side of the toolbar) to jump between TileMapLayer nodes
+- Toggle **Grid** to see cell boundaries while painting
+- The terrain grid updates automatically when you modify terrains in the native TileSet panel
+- For large areas, start with **Bucket Fill** (`B`) then refine edges with **Draw** (`D`)
+
+---
+
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| **"No terrain sets defined"** | Open the native **TileSet** bottom panel, select your TileSet, go to the **Terrains** tab, and add at least one terrain to a terrain set. |
+| **Tiles don't appear when painting** | Your tiles are missing peering bits. In the native TileSet panel, select each tile and configure its terrain assignment and peering bits. |
+| **Wrong tile appears at terrain borders** | Ensure all peering bit combinations are covered by tiles in your atlas. Missing combinations fall back to a default tile. |
+| **Can I paint individual tiles?** | No. This plugin only works with terrains. For raw tile placement, use the native Godot TileMap editor. |
+| **Blank/empty terrain icons** | The tile you used to set up the terrain may not have a visible texture. Pick a tile with a clear visual for that terrain. |
+
+---
+
+## Customizing Shortcuts
+
+The plugin registers input actions in Godot's Input Map. To change key bindings:
+
+1. Go to **Project → Project Settings → Input Map**
+2. Search for `ez_tile_` to find all plugin actions
+3. Click an action and assign a new key
+
+---
 
 ## Requirements
 
-- Godot 4.6+
-- TileSet with terrains and peering bits configured
+- **Godot 4.6 or later**
+- `TileSet` resource with **terrain sets** and **peering bits** configured
+- Works with `TileMapLayer` nodes (not the legacy `TileMap` node)
+
+---
 
 ## License
 
-See the plugin's `plugin.cfg` for author and version info.
+This project is provided as-is. See `addons/ez_tile_map_editor/plugin.cfg` for author and version info.
+
+---
+
+**Created by Shilo · Version 1.0**
