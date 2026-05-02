@@ -17,14 +17,17 @@ A Godot 4.6 editor plugin that makes **terrain painting** on `TileMapLayer` node
 | **Bucket Fill** | `B` | Flood fill contiguous areas (BFS-based) |
 | **Pick** | `P` | Sample a terrain from an existing cell to select it |
 | **Erase** | `E` | Remove individual cells from the current layer |
-| **Select** | `S` | Rectangle-select cells; click on selection to move; cut/copy/paste (Ctrl+X/C/V) |
+| **Select** | `S` | Rectangle-select cells; `Shift` to add (discontiguous), `Ctrl` to subtract; click selection to move; cut/copy/paste (Ctrl+X/C/V) |
 
 All tools support **undo/redo** with per-stroke merging, so a continuous drag is a single undo step.
 
 ### Selection Tool
 The Select tool (`S`) supports a full selection workflow:
 - **Rectangle-select** — click and drag to select all painted cells in a region
-- **Move selection** — click on an existing selection and drag to reposition tiles (with undo)
+- **Discontiguous selection** — hold `Shift` while drag-selecting to add more cells to an existing selection, even in non-adjacent regions
+- **Subtraction** — hold `Ctrl` (or `Cmd` on macOS) while drag-selecting to remove cells from the current selection
+- **Move selection** — click on an existing selection (without modifiers) and drag to reposition tiles (with undo)
+- **Selection undo/redo** — every selection modification (add, subtract, or clear) is recorded as its own undo step
 - Selection outline uses cell-aware borders (only outer edges are highlighted)
 
 ### Cut, Copy & Paste
@@ -118,6 +121,7 @@ Your `TileSet` must have:
 - The terrain grid updates automatically when you modify terrains in the native TileSet panel
 - For large areas, start with **Bucket Fill** (`B`) then refine edges with **Draw** (`D`)
 - **Select** (`S`) a region, then **Cut/Copy/Paste** (Ctrl+X/C/V) to duplicate or rearrange terrain sections
+- **Shift + drag-select** to add to an existing selection (discontiguous); **Ctrl + drag-select** to subtract from it
 - **Click a pasted selection** and drag to move it before committing (useful for fine-tuning placement)
 - Press **Esc** to cancel paste mode if you change your mind
 
