@@ -580,7 +580,7 @@ func canvas_input(event: InputEvent) -> bool:
 			_held_button_count += 1
 		if paint_tool == PaintTool.SEL:
 			if event.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT] and not mouse_down:
-				if _selection.has(mouse_current):
+				if _selection.has(mouse_current) and not event.shift_pressed and not event.is_command_or_control_pressed():
 					_start_move(mouse_current)
 				else:
 					_drag_type = DragType.SELECT
@@ -795,6 +795,8 @@ func canvas_draw(overlay: Control) -> void:
 						if tilemap.get_cell_source_id(c) != -1:
 							to_draw[c] = true
 				_draw_cells_outline(to_draw, Color(0.3, 0.7, 1.0, 1.0), overlay)
+			if not _selection.is_empty() and (Input.is_key_pressed(KEY_SHIFT) or Input.is_key_pressed(KEY_CTRL) or Input.is_key_pressed(KEY_META)):
+				_draw_cells_outline(_selection, Color(0.3, 0.7, 1.0, 0.5), overlay)
 		elif _drag_type == DragType.MOVE and mouse_down:
 			_draw_move_preview(mouse_current - mouse_start, overlay)
 		elif not _selection.is_empty():
@@ -1167,12 +1169,33 @@ func _draw_move_preview(offset: Vector2i, overlay: Control) -> void:
 
 func _commit_selection() -> void:
 	var rect := Rect2i(mouse_start, mouse_current - mouse_start).abs()
-	_selection.clear()
+	var ctrl_or_cmd := Input.is_key_pressed(KEY_CTRL) or Input.is_key_pressed(KEY_META)
+	var old_selection := _selection.keys()
+	if not undo_manager:
+		if not Input.is_key_pressed(KEY_SHIFT) and not ctrl_or_cmd:
+			_selection.clear()
+		for x in range(rect.position.x, rect.position.x + rect.size.x + 1):
+			for y in range(rect.position.y, rect.position.y + rect.size.y + 1):
+				var c := Vector2i(x, y)
+				if ctrl_or_cmd:
+					_selection.erase(c)
+				elif tilemap.get_cell_source_id(c) != -1:
+					_selection[c] = true
+		_drag_type = DragType.NONE
+		return
+	if not Input.is_key_pressed(KEY_SHIFT) and not ctrl_or_cmd:
+		_selection.clear()
 	for x in range(rect.position.x, rect.position.x + rect.size.x + 1):
 		for y in range(rect.position.y, rect.position.y + rect.size.y + 1):
 			var c := Vector2i(x, y)
-			if tilemap.get_cell_source_id(c) != -1:
+			if ctrl_or_cmd:
+				_selection.erase(c)
+			elif tilemap.get_cell_source_id(c) != -1:
 				_selection[c] = true
+	undo_manager.create_action("Change Selection", UndoRedo.MERGE_DISABLE, tilemap)
+	undo_manager.add_undo_method(self, "_set_selection", old_selection)
+	undo_manager.add_do_method(self, "_set_selection", _selection.keys())
+	undo_manager.commit_action()
 	_drag_type = DragType.NONE
 
 func _start_move(mouse_pos: Vector2i) -> void:
