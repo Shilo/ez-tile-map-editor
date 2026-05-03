@@ -44,6 +44,7 @@ const PANEL_SCENE := preload("res://addons/ez_tile_map_editor/ez_tile_map_editor
 
 var _split: SplitContainer
 var _game_area: Control
+var _panel_container: PanelContainer
 var _panel: Control
 var _undo_redo := UndoRedo.new()
 var _layers: Array[TileMapLayer] = []
@@ -158,8 +159,11 @@ func _build_nodes() -> void:
 	_split = SplitContainer.new()
 	_split.name = "SplitContainer"
 	_split.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_split.dragging_enabled = true
+	_split.dragger_visibility = SplitContainer.DRAGGER_VISIBLE
 	_split.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_split.visible = enabled
+	_split.dragged.connect(_on_split_dragged)
 	add_child(_split)
 
 	_game_area = GameArea.new()
@@ -169,6 +173,13 @@ func _build_nodes() -> void:
 	_game_area.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_game_area.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_game_area.size_flags_vertical = Control.SIZE_EXPAND_FILL
+
+	_panel_container = PanelContainer.new()
+	_panel_container.name = "PanelContainer"
+	_panel_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_panel_container.clip_contents = true
+	_panel_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_panel_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
 
 	_panel = PANEL_SCENE.instantiate()
 	_panel.runtime_mode = true
@@ -183,7 +194,10 @@ func _build_nodes() -> void:
 	_panel.update_overlay.connect(_queue_overlay_redraw)
 	if _panel.has_signal("close_requested"):
 		_panel.close_requested.connect(close)
+	_panel_container.add_child(_panel)
 	_configure_split_children()
+	call_deferred("_configure_split_drag_areas")
+	call_deferred("_sync_panel_size_to_container")
 
 
 func _layout_dock() -> void:
@@ -204,33 +218,49 @@ func _panel_should_be_first() -> bool:
 
 
 func _configure_split_children() -> void:
-	if not _split or not _panel or not _game_area:
+	if not _split or not _panel_container or not _game_area:
 		return
-	var desired := [_panel, _game_area] if _panel_should_be_first() else [_game_area, _panel]
+	var desired := [_panel_container, _game_area] if _panel_should_be_first() else [_game_area, _panel_container]
 	if _split.get_child_count() == desired.size() and _split.get_child(0) == desired[0] and _split.get_child(1) == desired[1]:
 		return
-	for child in [_panel, _game_area]:
+	for child in [_panel_container, _game_area]:
 		if child.get_parent() == _split:
 			_split.remove_child(child)
 	for child in desired:
 		_split.add_child(child)
+	_configure_split_drag_areas.call_deferred()
 
 
 func _apply_panel_size_flags() -> void:
-	var side_dock := activation_edge == ActivationEdge.LEFT or activation_edge == ActivationEdge.RIGHT
-	if side_dock:
-		_panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN if activation_edge == ActivationEdge.LEFT else Control.SIZE_SHRINK_END
-		_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	else:
-		_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN if activation_edge == ActivationEdge.TOP else Control.SIZE_SHRINK_END
+	_panel_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_panel_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_game_area.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_game_area.size_flags_vertical = Control.SIZE_EXPAND_FILL
 
 
+func _configure_split_drag_areas() -> void:
+	if not _split:
+		return
+	for drag_area in _split.get_drag_area_controls():
+		drag_area.mouse_filter = Control.MOUSE_FILTER_STOP
+
+
+func _on_split_dragged(_offset: int) -> void:
+	_sync_panel_size_to_container()
+
+
+func _sync_panel_size_to_container() -> void:
+	if not _panel_container or not _panel:
+		return
+	_panel.size = _panel_container.size
+	_panel.update_minimum_size()
+
+
 func _apply_split_offset() -> void:
 	var viewport_size := get_viewport().get_visible_rect().size
-	var panel_min := _panel.get_combined_minimum_size()
+	var panel_min := _panel_container.get_combined_minimum_size()
 	if _split.vertical:
 		var panel_height := panel_min.y
 		_split.split_offset = int(roundf(panel_height if _panel_should_be_first() else maxf(0.0, viewport_size.y - panel_height)))
@@ -240,34 +270,34 @@ func _apply_split_offset() -> void:
 
 
 func _show_panel(animated: bool) -> void:
-	if not _panel:
+	if not _panel_container:
 		return
 	if _tween:
 		_tween.kill()
-	_panel.visible = true
+	_panel_container.visible = true
 	if not animated or animation_duration <= 0.0:
-		_panel.modulate.a = 1.0
+		_panel_container.modulate.a = 1.0
 		return
-	_panel.modulate.a = 0.0
+	_panel_container.modulate.a = 0.0
 	_tween = create_tween()
-	_tween.tween_property(_panel, "modulate:a", 1.0, animation_duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_tween.tween_property(_panel_container, "modulate:a", 1.0, animation_duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
 
 func _hide_panel(animated: bool) -> void:
-	if not _panel:
+	if not _panel_container:
 		return
 	if _tween:
 		_tween.kill()
 	if not animated or animation_duration <= 0.0:
-		_panel.visible = false
-		_panel.modulate.a = 1.0
+		_panel_container.visible = false
+		_panel_container.modulate.a = 1.0
 		_queue_overlay_redraw()
 		return
 	_tween = create_tween()
-	_tween.tween_property(_panel, "modulate:a", 0.0, animation_duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_tween.tween_property(_panel_container, "modulate:a", 0.0, animation_duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	_tween.tween_callback(func():
-		_panel.visible = false
-		_panel.modulate.a = 1.0
+		_panel_container.visible = false
+		_panel_container.modulate.a = 1.0
 		_queue_overlay_redraw()
 	)
 
