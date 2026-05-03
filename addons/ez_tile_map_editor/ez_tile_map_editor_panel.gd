@@ -2,6 +2,7 @@
 extends Control
 
 signal update_overlay
+signal close_requested
 
 enum PaintTool { NONE, DRAW, RECT, LINE, BUCKET, SEL, PICK, ERASE }
 enum DragType { NONE, SELECT, MOVE, CLIPBOARD_PASTE }
@@ -30,6 +31,7 @@ func _is_draw_tool() -> bool:
 @onready var layer_highlight: Button = %LayerHighlight
 @onready var layer_grid: Button = %LayerGrid
 @onready var layer_select: OptionButton = %LayerSelect
+@onready var close_button: Button = %CloseButton
 
 @onready var terrain_grid: HFlowContainer = %TerrainGrid
 @onready var scroll_container: ScrollContainer = %TerrainScroll
@@ -98,23 +100,15 @@ var _native_tilemap_editor: Object = null
 var _native_grid_button: BaseButton = null
 var _native_highlight_button: BaseButton = null
 var _syncing_native: bool = false
+var _is_narrow_layout: bool = false
 
 func _ready() -> void:
-	_set_button_icon(draw_button, &"Edit")
-	_set_button_icon(rect_button, &"Rectangle")
-	_set_button_icon(line_button, &"Line")
-	_set_button_icon(fill_button, &"Bucket")
-	_set_button_icon(select_button, &"ToolSelect")
-	_set_button_icon(pick_button, &"ColorPick")
-	_set_button_icon(erase_button, &"Eraser")
-	_set_button_icon(erase_all_button, &"Clear")
 	erase_all_button.self_modulate = Color(1.0, 0.3, 0.3, 1.0)
-	_set_button_icon(layer_highlight, &"TileMapHighlightSelected")
-	_set_button_icon(layer_grid, &"Grid")
 
 	_setup_tooltips()
 
 	visibility_changed.connect(_on_visibility_changed)
+	resized.connect(_update_responsive_layout)
 
 	draw_button.pressed.connect(_on_tool_changed.bind(PaintTool.DRAW))
 	rect_button.pressed.connect(_on_tool_changed.bind(PaintTool.RECT))
@@ -128,6 +122,7 @@ func _ready() -> void:
 	layer_select.item_selected.connect(_on_layer_selected)
 	layer_highlight.toggled.connect(_on_layer_highlight_toggled)
 	layer_grid.toggled.connect(_on_layer_grid_toggled)
+	close_button.pressed.connect(_on_close_pressed)
 
 	draw_button.button_pressed = true
 	_tool_buttons = [null, draw_button, rect_button, line_button, fill_button, select_button, pick_button, erase_button]
@@ -136,13 +131,30 @@ func _ready() -> void:
 			btn.toggled.connect(_on_tool_toggled)
 	_update_empty_state()
 	_on_tool_toggled(false)
+	call_deferred("_update_responsive_layout")
 
-func _set_button_icon(button: Button, icon_name: StringName) -> void:
-	if not Engine.is_editor_hint():
+func set_close_button_visible(value: bool) -> void:
+	if close_button:
+		close_button.visible = value
+
+func _on_close_pressed() -> void:
+	close_requested.emit()
+
+func _update_responsive_layout() -> void:
+	var narrow := size.x > 0.0 and size.y > 0.0 and size.x < size.y
+	if narrow == _is_narrow_layout:
 		return
-	if not has_theme_icon(icon_name, &"EditorIcons"):
-		return
-	button.icon = get_theme_icon(icon_name, &"EditorIcons")
+	_is_narrow_layout = narrow
+	if narrow:
+		scroll_container.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		scroll_container.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+		terrain_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	else:
+		scroll_container.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		scroll_container.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+		terrain_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	terrain_grid.queue_sort()
+	update_minimum_size()
 
 func _on_visibility_changed() -> void:
 	if not visible:
@@ -188,6 +200,7 @@ func _setup_tooltips() -> void:
 	erase_all_button.tooltip_text = "Erase all tiles on selected tile map layer"
 	layer_highlight.tooltip_text = "Highlight selected tile map layer"
 	layer_grid.tooltip_text = "Toggle grid visibility"
+	close_button.tooltip_text = "Close EZ TileMap panel"
 
 func _get_action_key_text(action: StringName) -> String:
 	var events := InputMap.action_get_events(action)

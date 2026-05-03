@@ -1,5 +1,5 @@
 extends CanvasLayer
-class_name EZTileMapEditorRuntime
+class_name EZTileMapEditor
 
 enum ActivationEdge { TOP, BOTTOM, LEFT, RIGHT }
 
@@ -18,8 +18,8 @@ const PANEL_SCENE := preload("res://addons/ez_tile_map_editor/ez_tile_map_editor
 @export var enabled: bool = true:
 	set(value):
 		enabled = value
-		if is_inside_tree():
-			_root.visible = enabled
+		if is_inside_tree() and _split:
+			_split.visible = enabled
 
 @export var activation_edge: ActivationEdge = ActivationEdge.BOTTOM:
 	set(value):
@@ -28,19 +28,13 @@ const PANEL_SCENE := preload("res://addons/ez_tile_map_editor/ez_tile_map_editor
 			_layout_dock()
 
 @export_range(1, 256, 1, "or_greater") var activation_thickness_px: int = 12
-@export_range(64.0, 2048.0, 1.0, "or_greater") var dock_size_px: float = 160.0:
-	set(value):
-		dock_size_px = value
-		if is_inside_tree():
-			_layout_dock()
-
 @export_range(0.0, 2.0, 0.01) var animation_duration: float = 0.15
 @export var start_open: bool = false
 @export var show_close_button: bool = true:
 	set(value):
 		show_close_button = value
-		if _close_button:
-			_close_button.visible = show_close_button
+		if _panel and _panel.has_method("set_close_button_visible"):
+			_panel.set_close_button_visible(show_close_button)
 
 @export var excluded_controls: Array[NodePath] = []
 @export var excluded_rects: Array[Rect2] = []
@@ -67,11 +61,8 @@ const PANEL_SCENE := preload("res://addons/ez_tile_map_editor/ez_tile_map_editor
 			_panel.runtime_grid_color = value
 			_queue_overlay_redraw()
 
-var _root: Control
-var _overlay: Control
-var _dock: PanelContainer
-var _chrome: HBoxContainer
-var _close_button: Button
+var _split: SplitContainer
+var _game_area: Control
 var _panel: Control
 var _undo_redo := UndoRedo.new()
 var _layers: Array[TileMapLayer] = []
@@ -80,8 +71,8 @@ var _hover_armed := true
 var _tween: Tween
 
 
-class RuntimeOverlay extends Control:
-	var host: EZTileMapEditorRuntime
+class GameArea extends Control:
+	var host: EZTileMapEditor
 
 	func _draw() -> void:
 		if host:
@@ -155,7 +146,10 @@ func open(animated: bool = true) -> void:
 		return
 	_is_open = true
 	_hover_armed = true
-	_move_dock(_get_open_position(), animated)
+	_layout_dock()
+	if _panel:
+		_panel.about_to_be_visible()
+	_show_split(animated)
 
 
 func close(animated: bool = true) -> void:
@@ -163,7 +157,7 @@ func close(animated: bool = true) -> void:
 	_hover_armed = not _is_in_activation_zone(get_viewport().get_mouse_position())
 	if _panel:
 		_panel.canvas_mouse_exited()
-	_move_dock(_get_closed_position(), animated)
+	_hide_split(animated)
 
 
 func undo() -> void:
@@ -179,47 +173,20 @@ func redo() -> void:
 
 
 func _build_nodes() -> void:
-	_root = Control.new()
-	_root.name = "EZTileMapRuntimeRoot"
-	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_root.visible = enabled
-	add_child(_root)
+	_split = SplitContainer.new()
+	_split.name = "SplitContainer"
+	_split.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_split.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_split.visible = enabled
+	add_child(_split)
 
-	var overlay := RuntimeOverlay.new()
-	overlay.name = "Overlay"
-	overlay.host = self
-	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_root.add_child(overlay)
-	_overlay = overlay
-
-	_dock = PanelContainer.new()
-	_dock.name = "Dock"
-	_dock.mouse_filter = Control.MOUSE_FILTER_STOP
-	_root.add_child(_dock)
-
-	var layout := VBoxContainer.new()
-	layout.name = "RuntimeDockLayout"
-	layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	layout.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_dock.add_child(layout)
-
-	_chrome = HBoxContainer.new()
-	_chrome.name = "RuntimeDockChrome"
-	_chrome.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	layout.add_child(_chrome)
-
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_chrome.add_child(spacer)
-
-	_close_button = Button.new()
-	_close_button.name = "CloseButton"
-	_close_button.text = "Close"
-	_close_button.visible = show_close_button
-	_close_button.pressed.connect(close)
-	_chrome.add_child(_close_button)
+	_game_area = GameArea.new()
+	_game_area.name = "GameArea"
+	_game_area.host = self
+	_game_area.clip_contents = true
+	_game_area.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_game_area.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_game_area.size_flags_vertical = Control.SIZE_EXPAND_FILL
 
 	_panel = PANEL_SCENE.instantiate()
 	_panel.runtime_mode = true
@@ -233,63 +200,84 @@ func _build_nodes() -> void:
 	_panel.viewport_size_provider = Callable(self, "_get_viewport_size_for_panel")
 	_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_panel.update_overlay.connect(_queue_overlay_redraw)
-	layout.add_child(_panel)
+	if _panel.has_signal("close_requested"):
+		_panel.close_requested.connect(close)
+	if _panel.has_method("set_close_button_visible"):
+		_panel.set_close_button_visible(show_close_button)
+	_configure_split_children()
 
 
 func _layout_dock() -> void:
-	if not _root or not _dock:
+	if not _split:
 		return
-	var viewport_size := get_viewport().get_visible_rect().size
-	var side_dock := activation_edge == ActivationEdge.LEFT or activation_edge == ActivationEdge.RIGHT
-	if side_dock:
-		_dock.size = Vector2(dock_size_px, viewport_size.y)
-	else:
-		_dock.size = Vector2(viewport_size.x, dock_size_px)
+	_split.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_split.vertical = activation_edge == ActivationEdge.TOP or activation_edge == ActivationEdge.BOTTOM
+	_configure_split_children()
 	if _panel:
-		_panel.custom_minimum_size = Vector2(dock_size_px, 0.0) if side_dock else Vector2(0.0, dock_size_px)
-	_dock.position = _get_open_position() if _is_open else _get_closed_position()
+		_panel.custom_minimum_size = Vector2.ZERO
+		_apply_panel_size_flags()
+	_split.split_offset = 0
 	_queue_overlay_redraw()
 
 
-func _get_open_position() -> Vector2:
-	var viewport_size := get_viewport().get_visible_rect().size
-	match activation_edge:
-		ActivationEdge.TOP:
-			return Vector2.ZERO
-		ActivationEdge.BOTTOM:
-			return Vector2(0.0, viewport_size.y - _dock.size.y)
-		ActivationEdge.LEFT:
-			return Vector2.ZERO
-		ActivationEdge.RIGHT:
-			return Vector2(viewport_size.x - _dock.size.x, 0.0)
-	return Vector2.ZERO
+func _panel_should_be_first() -> bool:
+	return activation_edge == ActivationEdge.TOP or activation_edge == ActivationEdge.LEFT
 
 
-func _get_closed_position() -> Vector2:
-	var viewport_size := get_viewport().get_visible_rect().size
-	match activation_edge:
-		ActivationEdge.TOP:
-			return Vector2(0.0, -_dock.size.y)
-		ActivationEdge.BOTTOM:
-			return Vector2(0.0, viewport_size.y)
-		ActivationEdge.LEFT:
-			return Vector2(-_dock.size.x, 0.0)
-		ActivationEdge.RIGHT:
-			return Vector2(viewport_size.x, 0.0)
-	return Vector2.ZERO
+func _configure_split_children() -> void:
+	if not _split or not _panel or not _game_area:
+		return
+	var desired := [_panel, _game_area] if _panel_should_be_first() else [_game_area, _panel]
+	if _split.get_child_count() == desired.size() and _split.get_child(0) == desired[0] and _split.get_child(1) == desired[1]:
+		return
+	for child in [_panel, _game_area]:
+		if child.get_parent() == _split:
+			_split.remove_child(child)
+	for child in desired:
+		_split.add_child(child)
 
 
-func _move_dock(position: Vector2, animated: bool) -> void:
-	if not _dock:
+func _apply_panel_size_flags() -> void:
+	var side_dock := activation_edge == ActivationEdge.LEFT or activation_edge == ActivationEdge.RIGHT
+	_panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN if side_dock else Control.SIZE_EXPAND_FILL
+	_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL if side_dock else Control.SIZE_SHRINK_BEGIN
+	_game_area.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_game_area.size_flags_vertical = Control.SIZE_EXPAND_FILL
+
+
+func _show_split(animated: bool) -> void:
+	if not _panel:
+		return
+	if _tween:
+		_tween.kill()
+	_panel.visible = true
+	if not animated or animation_duration <= 0.0:
+		_panel.modulate.a = 1.0
+		return
+	_panel.modulate.a = 0.0
+	_tween = create_tween()
+	_tween.tween_property(_panel, "modulate:a", 1.0, animation_duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+
+
+func _hide_split(animated: bool) -> void:
+	if not _panel:
 		return
 	if _tween:
 		_tween.kill()
 	if not animated or animation_duration <= 0.0:
-		_dock.position = position
+		_panel.visible = false
+		_panel.modulate.a = 1.0
+		_queue_overlay_redraw()
 		return
 	_tween = create_tween()
-	_tween.tween_property(_dock, "position", position, animation_duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_tween.tween_property(_panel, "modulate:a", 0.0, animation_duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_tween.tween_callback(func():
+		_panel.visible = false
+		_panel.modulate.a = 1.0
+		_queue_overlay_redraw()
+	)
 
 
 func _is_in_activation_zone(pos: Vector2) -> bool:
@@ -360,11 +348,13 @@ func _get_viewport_size_for_panel() -> Vector2:
 
 
 func _draw_runtime_overlay(target: Control) -> void:
-	if not enabled or not _panel:
+	if not enabled or not _is_open or not _panel:
 		return
+	target.draw_set_transform(-target.global_position, 0.0, Vector2.ONE)
 	_panel.canvas_draw(target)
 	if layer_highlight_enabled and _panel.tilemap:
 		_draw_layer_highlight(target, _panel.tilemap)
+	target.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _draw_layer_highlight(target: Control, layer: TileMapLayer) -> void:
@@ -382,8 +372,8 @@ func _draw_layer_highlight(target: Control, layer: TileMapLayer) -> void:
 
 
 func _queue_overlay_redraw() -> void:
-	if _overlay:
-		_overlay.queue_redraw()
+	if _game_area:
+		_game_area.queue_redraw()
 
 
 func _setup_default_input_actions() -> void:

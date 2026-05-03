@@ -27,6 +27,7 @@ func _enter_tree() -> void:
 	_panel.undo_manager = get_undo_redo()
 
 	_panel.update_overlay.connect(update_overlays)
+	_panel.close_requested.connect(_on_panel_close_requested)
 
 	var main_screen := get_editor_interface().get_editor_main_screen()
 	main_screen.mouse_exited.connect(_panel.canvas_mouse_exited)
@@ -121,3 +122,9 @@ func _forward_canvas_draw_over_viewport(overlay: Control) -> void:
 func _queue_overlay_redraw() -> void:
 	if _overlay:
 		_overlay.queue_redraw()
+
+
+func _on_panel_close_requested() -> void:
+	if _button:
+		_button.button_pressed = false
+	hide_bottom_panel()

@@ -7,6 +7,16 @@
 [ext_resource type="Texture2D" uid="uid://ypqyaiosux1n" path="res://addons/ez_tile_map_editor/icons/RectangleFilled.svg" id="5_mssda"]
 [ext_resource type="Texture2D" uid="uid://dn47fjk6qduep" path="res://addons/ez_tile_map_editor/icons/EllipseFilled.svg" id="6_mj8ra"]
 [ext_resource type="Texture2D" uid="uid://5hjp6yccxqb4" path="res://addons/ez_tile_map_editor/icons/Ellipse.svg" id="7_civ1p"]
+[ext_resource type="Texture2D" path="res://addons/ez_tile_map_editor/icons/Edit.svg" id="8_edit"]
+[ext_resource type="Texture2D" path="res://addons/ez_tile_map_editor/icons/Line.svg" id="9_line"]
+[ext_resource type="Texture2D" path="res://addons/ez_tile_map_editor/icons/Bucket.svg" id="10_bucket"]
+[ext_resource type="Texture2D" path="res://addons/ez_tile_map_editor/icons/ToolSelect.svg" id="11_select"]
+[ext_resource type="Texture2D" path="res://addons/ez_tile_map_editor/icons/ColorPick.svg" id="12_pick"]
+[ext_resource type="Texture2D" path="res://addons/ez_tile_map_editor/icons/Eraser.svg" id="13_erase"]
+[ext_resource type="Texture2D" path="res://addons/ez_tile_map_editor/icons/Clear.svg" id="14_clear"]
+[ext_resource type="Texture2D" path="res://addons/ez_tile_map_editor/icons/TileMapHighlightSelected.svg" id="15_highlight"]
+[ext_resource type="Texture2D" path="res://addons/ez_tile_map_editor/icons/Grid.svg" id="16_grid"]
+[ext_resource type="Texture2D" path="res://addons/ez_tile_map_editor/icons/Close.svg" id="17_close"]
 
 [sub_resource type="ButtonGroup" id="draw_group"]
 
@@ -16,10 +26,6 @@ action = &"ez_tile_draw"
 [sub_resource type="Shortcut" id="shortcut_draw"]
 resource_name = "Draw Tool"
 events = [SubResource("action_draw")]
-
-[sub_resource type="DPITexture" id="DPITexture_wo83r"]
-_source = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\"><path fill=\"#ff5d5d\" d=\"M2 1v8.586l1.293-1.293a1 1 0 0 1 1.414 0L7 10.587l2.293-2.293a1 1 0 0 1 1.414 0L13 10.586l1-1V6H9V1H2zm8 0v4h4zm-6 9.414-2 2V15h12v-2.586l-.293.293a1 1 0 0 1-1.414 0L10 10.414l-2.293 2.293a1 1 0 0 1-1.414 0L4 10.414z\"/></svg>
-"
 
 [sub_resource type="Resource" id="Resource_mj8ra"]
 script = ExtResource("3_mhpx5")
@@ -82,7 +88,6 @@ events = [SubResource("action_erase")]
 
 [node name="EZTileMapEditorPanel" type="Control" unique_id=458619934]
 clip_contents = true
-custom_minimum_size = Vector2(0, 120)
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -100,8 +105,10 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="Toolbar" type="HBoxContainer" parent="VBoxContainer" unique_id=1615095200]
+[node name="Toolbar" type="HFlowContainer" parent="VBoxContainer" unique_id=1615095200]
 layout_mode = 2
+theme_override_constants/h_separation = 4
+theme_override_constants/v_separation = 2
 
 [node name="Draw" type="Button" parent="VBoxContainer/Toolbar" unique_id=1129836330]
 unique_name_in_owner = true
@@ -113,7 +120,7 @@ button_pressed = true
 button_group = SubResource("draw_group")
 shortcut = SubResource("shortcut_draw")
 shortcut_in_tooltip = false
-icon = SubResource("DPITexture_wo83r")
+icon = ExtResource("8_edit")
 
 [node name="Rect" type="Button" parent="VBoxContainer/Toolbar" unique_id=503994299]
 unique_name_in_owner = true
@@ -138,7 +145,7 @@ toggle_mode = true
 button_group = SubResource("draw_group")
 shortcut = SubResource("shortcut_line")
 shortcut_in_tooltip = false
-icon = SubResource("DPITexture_wo83r")
+icon = ExtResource("9_line")
 flat = true
 
 [node name="Fill" type="Button" parent="VBoxContainer/Toolbar" unique_id=1211768775]
@@ -150,7 +157,7 @@ toggle_mode = true
 button_group = SubResource("draw_group")
 shortcut = SubResource("shortcut_fill")
 shortcut_in_tooltip = false
-icon = SubResource("DPITexture_wo83r")
+icon = ExtResource("10_bucket")
 flat = true
 
 [node name="VSeparator1" type="VSeparator" parent="VBoxContainer/Toolbar" unique_id=2043930170]
@@ -169,7 +176,7 @@ toggle_mode = true
 button_group = SubResource("draw_group")
 shortcut = SubResource("shortcut_select")
 shortcut_in_tooltip = false
-icon = SubResource("DPITexture_wo83r")
+icon = ExtResource("11_select")
 flat = true
 
 [node name="Pick" type="Button" parent="VBoxContainer/Toolbar" unique_id=1034510133]
@@ -182,7 +189,7 @@ toggle_mode = true
 button_group = SubResource("draw_group")
 shortcut = SubResource("shortcut_pick")
 shortcut_in_tooltip = false
-icon = SubResource("DPITexture_wo83r")
+icon = ExtResource("12_pick")
 flat = true
 
 [node name="Erase" type="Button" parent="VBoxContainer/Toolbar" unique_id=343540273]
@@ -194,7 +201,7 @@ toggle_mode = true
 button_group = SubResource("draw_group")
 shortcut = SubResource("shortcut_erase")
 shortcut_in_tooltip = false
-icon = SubResource("DPITexture_wo83r")
+icon = ExtResource("13_erase")
 flat = true
 
 [node name="VSeparator2" type="VSeparator" parent="VBoxContainer/Toolbar" unique_id=695127218]
@@ -205,7 +212,7 @@ unique_name_in_owner = true
 self_modulate = Color(1, 0.3, 0.3, 1)
 layout_mode = 2
 tooltip_text = "Erase all tiles on selected tile map layer"
-icon = SubResource("DPITexture_wo83r")
+icon = ExtResource("14_clear")
 flat = true
 
 [node name="Spacer" type="Control" parent="VBoxContainer/Toolbar" unique_id=1902240989]
@@ -217,7 +224,7 @@ unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Highlight selected tile map layer"
 toggle_mode = true
-icon = SubResource("DPITexture_wo83r")
+icon = ExtResource("15_highlight")
 flat = true
 
 [node name="LayerGrid" type="Button" parent="VBoxContainer/Toolbar" unique_id=692744213]
@@ -225,7 +232,7 @@ unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Toggle grid visibility"
 toggle_mode = true
-icon = SubResource("DPITexture_wo83r")
+icon = ExtResource("16_grid")
 flat = true
 
 [node name="VSeparator3" type="VSeparator" parent="VBoxContainer/Toolbar" unique_id=2092628571]
@@ -233,9 +240,18 @@ layout_mode = 2
 
 [node name="LayerSelect" type="OptionButton" parent="VBoxContainer/Toolbar" unique_id=1587315912]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(120, 0)
+custom_minimum_size = Vector2(96, 0)
 layout_mode = 2
 size_flags_horizontal = 0
+
+[node name="CloseButton" type="Button" parent="VBoxContainer/Toolbar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(24, 0)
+layout_mode = 2
+tooltip_text = "Close EZ TileMap panel"
+focus_mode = 0
+icon = ExtResource("17_close")
+flat = true
 
 [node name="EmptyLabel" type="Label" parent="VBoxContainer" unique_id=510950093]
 unique_name_in_owner = true
