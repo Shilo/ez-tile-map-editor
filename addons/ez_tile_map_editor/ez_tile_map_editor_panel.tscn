@@ -17,6 +17,7 @@
 [ext_resource type="Texture2D" path="res://addons/ez_tile_map_editor/icons/tile_map_highlight_selected.svg" id="15_highlight"]
 [ext_resource type="Texture2D" path="res://addons/ez_tile_map_editor/icons/grid.svg" id="16_grid"]
 [ext_resource type="Texture2D" path="res://addons/ez_tile_map_editor/icons/close.svg" id="17_close"]
+[ext_resource type="Texture2D" path="res://addons/ez_tile_map_editor/icons/gui_tab_menu_hl_dark_background.svg" id="18_more"]
 
 [sub_resource type="ButtonGroup" id="draw_group"]
 
@@ -243,6 +244,15 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(96, 0)
 layout_mode = 2
 size_flags_horizontal = 0
+
+[node name="MoreButton" type="MenuButton" parent="VBoxContainer/Toolbar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(24, 0)
+layout_mode = 2
+tooltip_text = "Runtime dock options"
+focus_mode = 0
+icon = ExtResource("18_more")
+flat = true
 
 [node name="CloseButton" type="Button" parent="VBoxContainer/Toolbar"]
 unique_name_in_owner = true

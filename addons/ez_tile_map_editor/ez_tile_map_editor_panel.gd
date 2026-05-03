@@ -3,6 +3,7 @@ extends Control
 
 signal update_overlay
 signal close_requested
+signal dock_edge_requested(edge: int)
 
 enum PaintTool { NONE, DRAW, RECT, LINE, BUCKET, SEL, PICK, ERASE }
 enum DragType { NONE, SELECT, MOVE, CLIPBOARD_PASTE }
@@ -15,10 +16,15 @@ const COLOR_ERASE_OVERLAY := Color(0.0, 0.0, 0.0, 0.35)
 const COLOR_PAINT_OVERLAY := Color(1.0, 1.0, 1.0, 0.35)
 const COLOR_MOVE_PASTE_FALLBACK := Color(1.0, 1.0, 1.0, 0.25)
 const RUNTIME_GRID_COLOR := Color(1.0, 0.5, 0.2, 0.5)
+const TERRAIN_ENTRY_SIZE := Vector2(72, 72)
 const RUNTIME_SETTINGS_PATH := "user://ez_tile_map_editor.cfg"
 const RUNTIME_SETTINGS_SECTION := "panel"
 const RUNTIME_GRID_KEY := "grid_enabled"
 const RUNTIME_LAYER_HIGHLIGHT_KEY := "layer_highlight_enabled"
+const DOCK_EDGE_TOP := 0
+const DOCK_EDGE_BOTTOM := 1
+const DOCK_EDGE_LEFT := 2
+const DOCK_EDGE_RIGHT := 3
 
 static var _runtime_settings_loaded: bool = false
 static var _runtime_grid_enabled: bool = true
@@ -41,6 +47,7 @@ func _is_draw_tool() -> bool:
 @onready var layer_highlight: Button = %LayerHighlight
 @onready var layer_grid: Button = %LayerGrid
 @onready var layer_select: OptionButton = %LayerSelect
+@onready var more_button: MenuButton = %MoreButton
 @onready var close_button: Button = %CloseButton
 
 @onready var layout_root: VBoxContainer = $VBoxContainer
@@ -81,6 +88,11 @@ var layer_provider: Callable
 var layer_selected_callback: Callable
 var canvas_transform_provider: Callable
 var viewport_size_provider: Callable
+var runtime_highlight_changed_callback: Callable
+var runtime_dock_edge: int = DOCK_EDGE_BOTTOM:
+	set(value):
+		runtime_dock_edge = clampi(value, DOCK_EDGE_TOP, DOCK_EDGE_RIGHT)
+		_update_more_menu_checks()
 
 var flattened_terrains: Array[Dictionary] = []
 var selected_index: int = -1
@@ -114,6 +126,7 @@ func _ready() -> void:
 	erase_all_button.self_modulate = Color(1.0, 0.3, 0.3, 1.0)
 
 	_setup_tooltips()
+	_setup_more_menu()
 
 	visibility_changed.connect(_on_visibility_changed)
 	resized.connect(_update_responsive_layout)
@@ -209,7 +222,31 @@ func _setup_tooltips() -> void:
 	erase_all_button.tooltip_text = "Erase all tiles on selected tile map layer"
 	layer_highlight.tooltip_text = "Highlight selected tile map layer"
 	layer_grid.tooltip_text = "Toggle grid visibility"
+	more_button.tooltip_text = "Runtime dock options"
 	close_button.tooltip_text = "Close EZ TileMap panel"
+
+func _setup_more_menu() -> void:
+	more_button.visible = runtime_mode
+	var popup := more_button.get_popup()
+	popup.clear()
+	popup.add_check_item("Dock top", DOCK_EDGE_TOP)
+	popup.add_check_item("Dock bottom", DOCK_EDGE_BOTTOM)
+	popup.add_check_item("Dock left", DOCK_EDGE_LEFT)
+	popup.add_check_item("Dock right", DOCK_EDGE_RIGHT)
+	if not popup.id_pressed.is_connected(_on_more_menu_id_pressed):
+		popup.id_pressed.connect(_on_more_menu_id_pressed)
+	_update_more_menu_checks()
+
+func _on_more_menu_id_pressed(id: int) -> void:
+	runtime_dock_edge = id
+	dock_edge_requested.emit(id)
+
+func _update_more_menu_checks() -> void:
+	if not more_button:
+		return
+	var popup := more_button.get_popup()
+	for i in range(popup.item_count):
+		popup.set_item_checked(i, popup.get_item_id(i) == runtime_dock_edge)
 
 func _get_action_key_text(action: StringName) -> String:
 	var events := InputMap.action_get_events(action)
@@ -404,7 +441,7 @@ func _make_icon(source: TileSetAtlasSource, coord: Vector2i) -> Dictionary:
 
 func _create_terrain_entry(data: Dictionary, index: int) -> void:
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(72, 72)
+	panel.custom_minimum_size = TERRAIN_ENTRY_SIZE
 	panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	panel.mouse_filter = Control.MOUSE_FILTER_PASS
 
@@ -567,6 +604,9 @@ func _on_layer_highlight_toggled(toggled: bool) -> void:
 		_ensure_runtime_settings_loaded()
 		_runtime_layer_highlight_enabled = toggled
 		_save_runtime_settings()
+		_update_runtime_toggle_visuals()
+		if runtime_highlight_changed_callback.is_valid():
+			runtime_highlight_changed_callback.call()
 		update_overlay.emit()
 		return
 
@@ -588,6 +628,7 @@ func _on_layer_grid_toggled(toggled: bool) -> void:
 		_ensure_runtime_settings_loaded()
 		_runtime_grid_enabled = toggled
 		_save_runtime_settings()
+		_update_runtime_toggle_visuals()
 		update_overlay.emit()
 		return
 
@@ -687,8 +728,10 @@ func about_to_be_visible() -> void:
 		tileset = tilemap.tile_set
 	if runtime_mode:
 		_ensure_runtime_settings_loaded()
+		more_button.visible = true
 		layer_highlight.set_pressed_no_signal(_runtime_layer_highlight_enabled)
 		layer_grid.set_pressed_no_signal(_runtime_grid_enabled)
+		_update_runtime_toggle_visuals()
 		_update_empty_state()
 		return
 	var settings := _get_editor_settings()
@@ -711,6 +754,12 @@ func is_layer_highlight_enabled() -> bool:
 		return settings.get_setting("editors/tiles_editor/highlight_selected_layer")
 	return false
 
+func _update_runtime_toggle_visuals() -> void:
+	if not runtime_mode:
+		return
+	layer_highlight.flat = not layer_highlight.button_pressed
+	layer_grid.flat = not layer_grid.button_pressed
+
 func _ensure_runtime_settings_loaded() -> void:
 	if _runtime_settings_loaded:
 		return
@@ -723,6 +772,7 @@ func _ensure_runtime_settings_loaded() -> void:
 
 func _save_runtime_settings() -> void:
 	var config := ConfigFile.new()
+	config.load(RUNTIME_SETTINGS_PATH)
 	config.set_value(RUNTIME_SETTINGS_SECTION, RUNTIME_GRID_KEY, _runtime_grid_enabled)
 	config.set_value(RUNTIME_SETTINGS_SECTION, RUNTIME_LAYER_HIGHLIGHT_KEY, _runtime_layer_highlight_enabled)
 	config.save(RUNTIME_SETTINGS_PATH)
