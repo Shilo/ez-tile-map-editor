@@ -312,7 +312,7 @@ func _configure_split_drag_areas() -> void:
 
 func _on_split_dragged(_offset: int) -> void:
 	_sync_panel_size_to_container()
-	_save_current_dock_axis_size()
+	_save_current_dock_axis_size.call_deferred()
 
 
 func _sync_panel_size_to_container() -> void:
@@ -340,11 +340,28 @@ func _apply_split_offset() -> void:
 func _split_offset_for_panel_size(panel_size: float, axis_size: float) -> int:
 	if axis_size <= 0.0:
 		return 0
-	var baseline := axis_size * 0.5
+	var available_axis_size := maxf(1.0, axis_size - _get_split_separator_size())
+	panel_size = clampf(panel_size, 1.0, available_axis_size)
+	var baseline := available_axis_size * 0.5
 	var offset := panel_size - baseline
 	if not _panel_should_be_first():
 		offset = -offset
 	return int(roundf(offset))
+
+
+func _get_split_separator_size() -> float:
+	if not _split:
+		return 0.0
+	var separator := 0.0
+	if _split.has_theme_constant("separation"):
+		separator = float(_split.get_theme_constant("separation"))
+	for drag_area in _split.get_drag_area_controls():
+		var drag_control := drag_area as Control
+		if not drag_control:
+			continue
+		var drag_size := drag_control.get_combined_minimum_size()
+		separator = maxf(separator, drag_size.y if _split.vertical else drag_size.x)
+	return separator
 
 
 func _calculate_initial_panel_axis_size(side_dock: bool) -> float:
@@ -685,7 +702,7 @@ func _handle_viewport_navigation_input(event: InputEvent) -> bool:
 			_zoom_navigation_camera(event.position, event.button_index == MOUSE_BUTTON_WHEEL_UP)
 			return true
 	if event is InputEventMouseMotion and _navigation_panning:
-		_navigation_camera.global_position -= event.relative * _navigation_camera.zoom
+		_navigation_camera.global_position -= event.relative / _navigation_camera.zoom
 		return true
 	return false
 

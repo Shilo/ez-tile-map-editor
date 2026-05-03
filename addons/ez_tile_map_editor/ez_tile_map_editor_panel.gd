@@ -121,6 +121,7 @@ var _native_grid_button: BaseButton = null
 var _native_highlight_button: BaseButton = null
 var _syncing_native: bool = false
 var _is_narrow_layout: bool = false
+var _dock_position_popup: PopupMenu = null
 
 func _ready() -> void:
 	erase_all_button.self_modulate = Color(1.0, 0.3, 0.3, 1.0)
@@ -229,12 +230,19 @@ func _setup_more_menu() -> void:
 	more_button.visible = runtime_mode
 	var popup := more_button.get_popup()
 	popup.clear()
-	popup.add_check_item("Dock top", DOCK_EDGE_TOP)
-	popup.add_check_item("Dock bottom", DOCK_EDGE_BOTTOM)
-	popup.add_check_item("Dock left", DOCK_EDGE_LEFT)
-	popup.add_check_item("Dock right", DOCK_EDGE_RIGHT)
-	if not popup.id_pressed.is_connected(_on_more_menu_id_pressed):
-		popup.id_pressed.connect(_on_more_menu_id_pressed)
+	_dock_position_popup = popup.get_node_or_null("DockPositionPopup") as PopupMenu
+	if not _dock_position_popup:
+		_dock_position_popup = PopupMenu.new()
+		_dock_position_popup.name = "DockPositionPopup"
+		popup.add_child(_dock_position_popup)
+	_dock_position_popup.clear()
+	_dock_position_popup.add_check_item("Top", DOCK_EDGE_TOP)
+	_dock_position_popup.add_check_item("Bottom", DOCK_EDGE_BOTTOM)
+	_dock_position_popup.add_check_item("Left", DOCK_EDGE_LEFT)
+	_dock_position_popup.add_check_item("Right", DOCK_EDGE_RIGHT)
+	popup.add_submenu_item("Dock Position", "DockPositionPopup")
+	if not _dock_position_popup.id_pressed.is_connected(_on_more_menu_id_pressed):
+		_dock_position_popup.id_pressed.connect(_on_more_menu_id_pressed)
 	_update_more_menu_checks()
 
 func _on_more_menu_id_pressed(id: int) -> void:
@@ -242,11 +250,10 @@ func _on_more_menu_id_pressed(id: int) -> void:
 	dock_edge_requested.emit(id)
 
 func _update_more_menu_checks() -> void:
-	if not more_button:
+	if not _dock_position_popup:
 		return
-	var popup := more_button.get_popup()
-	for i in range(popup.item_count):
-		popup.set_item_checked(i, popup.get_item_id(i) == runtime_dock_edge)
+	for i in range(_dock_position_popup.item_count):
+		_dock_position_popup.set_item_checked(i, _dock_position_popup.get_item_id(i) == runtime_dock_edge)
 
 func _get_action_key_text(action: StringName) -> String:
 	var events := InputMap.action_get_events(action)
