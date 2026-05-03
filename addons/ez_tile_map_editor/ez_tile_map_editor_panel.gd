@@ -62,7 +62,15 @@ var tileset: TileSet = null:
 				tileset.changed.connect(_on_tileset_changed)
 		_refresh_terrains()
 
-var undo_manager: EditorUndoRedoManager
+var undo_manager: Object
+var runtime_mode: bool = false
+var runtime_grid_enabled: bool = true
+var runtime_layer_highlight_enabled: bool = false
+var runtime_grid_color: Color = Color(1.0, 0.5, 0.2, 0.5)
+var layer_provider: Callable
+var layer_selected_callback: Callable
+var canvas_transform_provider: Callable
+var viewport_size_provider: Callable
 
 var flattened_terrains: Array[Dictionary] = []
 var selected_index: int = -1
@@ -85,24 +93,24 @@ var _drag_type: int = DragType.NONE
 var _drag_modified: Dictionary = {}
 var _held_button_count: int = 0
 var _clipboard: TileMapPattern
-var plugin: EditorPlugin = null
+var plugin: Object = null
 var _native_tilemap_editor: Object = null
 var _native_grid_button: BaseButton = null
 var _native_highlight_button: BaseButton = null
 var _syncing_native: bool = false
 
 func _ready() -> void:
-	draw_button.icon = get_theme_icon("Edit", "EditorIcons")
-	rect_button.icon = get_theme_icon("Rectangle", "EditorIcons")
-	line_button.icon = get_theme_icon("Line", "EditorIcons")
-	fill_button.icon = get_theme_icon("Bucket", "EditorIcons")
-	select_button.icon = get_theme_icon("ToolSelect", "EditorIcons")
-	pick_button.icon = get_theme_icon("ColorPick", "EditorIcons")
-	erase_button.icon = get_theme_icon("Eraser", "EditorIcons")
-	erase_all_button.icon = get_theme_icon("Clear", "EditorIcons")
+	_set_button_icon(draw_button, &"Edit")
+	_set_button_icon(rect_button, &"Rectangle")
+	_set_button_icon(line_button, &"Line")
+	_set_button_icon(fill_button, &"Bucket")
+	_set_button_icon(select_button, &"ToolSelect")
+	_set_button_icon(pick_button, &"ColorPick")
+	_set_button_icon(erase_button, &"Eraser")
+	_set_button_icon(erase_all_button, &"Clear")
 	erase_all_button.self_modulate = Color(1.0, 0.3, 0.3, 1.0)
-	layer_highlight.icon = get_theme_icon("TileMapHighlightSelected", "EditorIcons")
-	layer_grid.icon = get_theme_icon("Grid", "EditorIcons")
+	_set_button_icon(layer_highlight, &"TileMapHighlightSelected")
+	_set_button_icon(layer_grid, &"Grid")
 
 	_setup_tooltips()
 
@@ -128,6 +136,13 @@ func _ready() -> void:
 			btn.toggled.connect(_on_tool_toggled)
 	_update_empty_state()
 	_on_tool_toggled(false)
+
+func _set_button_icon(button: Button, icon_name: StringName) -> void:
+	if not Engine.is_editor_hint():
+		return
+	if not has_theme_icon(icon_name, &"EditorIcons"):
+		return
+	button.icon = get_theme_icon(icon_name, &"EditorIcons")
 
 func _on_visibility_changed() -> void:
 	if not visible:
@@ -442,18 +457,29 @@ func _update_layer_dropdown() -> void:
 	if not tilemap:
 		layer_select.disabled = true
 		return
-	var root := EditorInterface.get_edited_scene_root()
+
+	var siblings: Array[Node] = _get_available_layers()
+	if runtime_mode:
+		_populate_layer_dropdown(siblings)
+		return
+
+	var editor_interface := _get_editor_interface()
+	var root: Node = null
+	if editor_interface:
+		root = editor_interface.call("get_edited_scene_root") as Node
 	if not root:
 		layer_select.disabled = true
 		layer_select.add_item(tilemap.name)
 		layer_select.select(0)
 		return
-	var siblings: Array[Node] = []
+	siblings.clear()
 	_collect_visible_tilemap_layers(root, siblings)
+	_populate_layer_dropdown(siblings)
 
+func _populate_layer_dropdown(siblings: Array[Node]) -> void:
 	if siblings.size() <= 1:
 		layer_select.disabled = true
-		layer_select.add_item(tilemap.name)
+		layer_select.add_item(tilemap.name if tilemap else "TileMapLayer")
 		layer_select.select(0)
 		return
 	for i in siblings.size():
@@ -471,19 +497,58 @@ func _collect_visible_tilemap_layers(node: Node, result: Array[Node]) -> void:
 			_collect_visible_tilemap_layers(child, result)
 
 func _on_layer_selected(idx: int) -> void:
-	var root := EditorInterface.get_edited_scene_root()
+	var siblings := _get_available_layers()
+	if runtime_mode:
+		if idx >= 0 and idx < siblings.size():
+			if layer_selected_callback.is_valid():
+				layer_selected_callback.call(siblings[idx])
+			else:
+				tilemap = siblings[idx]
+		return
+
+	var editor_interface := _get_editor_interface()
+	var root: Node = null
+	if editor_interface:
+		root = editor_interface.call("get_edited_scene_root") as Node
 	if not root:
 		return
-	var siblings: Array[Node] = []
+	siblings.clear()
 	_collect_visible_tilemap_layers(root, siblings)
 	if idx >= 0 and idx < siblings.size():
-		EditorInterface.edit_node(siblings[idx])
+		editor_interface.call("edit_node", siblings[idx])
+
+func _get_available_layers() -> Array[Node]:
+	if runtime_mode and layer_provider.is_valid():
+		var provided = layer_provider.call()
+		var result: Array[Node] = []
+		if provided is Array:
+			for node in provided:
+				if node is TileMapLayer:
+					result.append(node)
+		return result
+	if not runtime_mode:
+		var editor_interface := _get_editor_interface()
+		var root: Node = null
+		if editor_interface:
+			root = editor_interface.call("get_edited_scene_root") as Node
+		if root:
+			var siblings: Array[Node] = []
+			_collect_visible_tilemap_layers(root, siblings)
+			return siblings
+	return []
 
 func _on_layer_highlight_toggled(toggled: bool) -> void:
 	if _syncing_native:
 		return
 
-	var settings := EditorInterface.get_editor_settings()
+	if runtime_mode:
+		runtime_layer_highlight_enabled = toggled
+		update_overlay.emit()
+		return
+
+	var settings := _get_editor_settings()
+	if not settings:
+		return
 	settings.set_setting("editors/tiles_editor/highlight_selected_layer", toggled)
 	settings.emit_changed()
 	_toggle_native("Highlight Selected TileMap Layer", toggled)
@@ -495,7 +560,14 @@ func _on_layer_grid_toggled(toggled: bool) -> void:
 	if _syncing_native:
 		return
 
-	var settings := EditorInterface.get_editor_settings()
+	if runtime_mode:
+		runtime_grid_enabled = toggled
+		update_overlay.emit()
+		return
+
+	var settings := _get_editor_settings()
+	if not settings:
+		return
 	settings.set_setting("editors/tiles_editor/display_grid", toggled)
 	settings.emit_changed()
 	_toggle_native("Toggle grid visibility.", toggled)
@@ -508,7 +580,12 @@ func _toggle_native(tooltip: String, pressed: bool) -> void:
 	if editor:
 		_find_and_toggle_in(editor, tooltip, pressed)
 	else:
-		_find_and_toggle_in(EditorInterface.get_base_control(), tooltip, pressed)
+		var editor_interface := _get_editor_interface()
+		var base_control: Control = null
+		if editor_interface:
+			base_control = editor_interface.call("get_base_control") as Control
+		if base_control:
+			_find_and_toggle_in(base_control, tooltip, pressed)
 
 func _find_and_toggle_in(node: Node, tooltip: String, pressed: bool) -> void:
 	for child in node.get_children():
@@ -542,8 +619,9 @@ func _on_native_grid_toggled(pressed: bool) -> void:
 	_syncing_native = true
 
 	layer_grid.set_pressed_no_signal(pressed)
-	var settings := EditorInterface.get_editor_settings()
-	settings.set_setting("editors/tiles_editor/display_grid", pressed)
+	var settings := _get_editor_settings()
+	if settings:
+		settings.set_setting("editors/tiles_editor/display_grid", pressed)
 	_syncing_native = false
 
 func _on_native_highlight_toggled(pressed: bool) -> void:
@@ -552,14 +630,20 @@ func _on_native_highlight_toggled(pressed: bool) -> void:
 	_syncing_native = true
 
 	layer_highlight.set_pressed_no_signal(pressed)
-	var settings := EditorInterface.get_editor_settings()
-	settings.set_setting("editors/tiles_editor/highlight_selected_layer", pressed)
+	var settings := _get_editor_settings()
+	if settings:
+		settings.set_setting("editors/tiles_editor/highlight_selected_layer", pressed)
 	_syncing_native = false
 
 func _ensure_native_tilemap_editor() -> Object:
 	if _native_tilemap_editor and is_instance_valid(_native_tilemap_editor):
 		return _native_tilemap_editor
-	var editor_base := EditorInterface.get_base_control()
+	var editor_interface := _get_editor_interface()
+	var editor_base: Control = null
+	if editor_interface:
+		editor_base = editor_interface.call("get_base_control") as Control
+	if not editor_base:
+		return null
 	_native_tilemap_editor = _find_tilemap_editor_in_tree(editor_base)
 	return _native_tilemap_editor
 
@@ -575,13 +659,34 @@ func _find_tilemap_editor_in_tree(node: Node) -> Object:
 func about_to_be_visible() -> void:
 	if tilemap and tileset != tilemap.tile_set:
 		tileset = tilemap.tile_set
-	var settings := EditorInterface.get_editor_settings()
-	var hl := settings.get_setting("editors/tiles_editor/highlight_selected_layer")
-	var grid := settings.get_setting("editors/tiles_editor/display_grid")
+	if runtime_mode:
+		layer_highlight.set_pressed_no_signal(runtime_layer_highlight_enabled)
+		layer_grid.set_pressed_no_signal(runtime_grid_enabled)
+		_update_empty_state()
+		return
+	var settings := _get_editor_settings()
+	if not settings:
+		_update_empty_state()
+		return
+	var hl: bool = settings.get_setting("editors/tiles_editor/highlight_selected_layer")
+	var grid: bool = settings.get_setting("editors/tiles_editor/display_grid")
 
 	layer_highlight.set_pressed_no_signal(hl)
 	layer_grid.set_pressed_no_signal(grid)
 	_update_empty_state()
+
+func _get_editor_interface() -> Object:
+	if not Engine.is_editor_hint():
+		return null
+	if not Engine.has_singleton(&"EditorInterface"):
+		return null
+	return Engine.get_singleton(&"EditorInterface")
+
+func _get_editor_settings() -> Object:
+	var editor_interface := _get_editor_interface()
+	if not editor_interface:
+		return null
+	return editor_interface.call("get_editor_settings")
 
 func _get_selected_terrain() -> Dictionary:
 	if selected_index >= 0 and selected_index < flattened_terrains.size():
@@ -609,6 +714,44 @@ func _restore_cell_state(c: Vector2i, state: Dictionary, target: TileMapLayer) -
 func _restore_cells(saved: Dictionary, tm: TileMapLayer) -> void:
 	for c in saved:
 		_restore_cell_state(c, saved[c], tm)
+
+func _has_history() -> bool:
+	return undo_manager != null
+
+func _history_is_editor_manager() -> bool:
+	return undo_manager != null and undo_manager.has_method("get_object_history_id")
+
+func _history_create_action(action_name: String, merge_mode: int = UndoRedo.MERGE_DISABLE, context: Object = null, backward_undo_ops: bool = false) -> void:
+	if not undo_manager:
+		return
+	if _history_is_editor_manager():
+		undo_manager.callv("create_action", [action_name, merge_mode, context, backward_undo_ops])
+	else:
+		undo_manager.callv("create_action", [action_name, merge_mode, backward_undo_ops])
+
+func _history_add_do_method(target: Object, method_name: StringName, args: Array = []) -> void:
+	if not undo_manager:
+		return
+	if _history_is_editor_manager():
+		undo_manager.callv("add_do_method", [target, method_name] + args)
+	else:
+		undo_manager.call("add_do_method", Callable(self, "_history_call").bind(target, method_name, args))
+
+func _history_add_undo_method(target: Object, method_name: StringName, args: Array = []) -> void:
+	if not undo_manager:
+		return
+	if _history_is_editor_manager():
+		undo_manager.callv("add_undo_method", [target, method_name] + args)
+	else:
+		undo_manager.call("add_undo_method", Callable(self, "_history_call").bind(target, method_name, args))
+
+func _history_commit_action() -> void:
+	if undo_manager:
+		undo_manager.call("commit_action")
+
+func _history_call(target: Object, method_name: StringName, args: Array) -> void:
+	if is_instance_valid(target):
+		target.callv(method_name, args)
 
 # ---- CANVAS INPUT ----
 
@@ -758,7 +901,7 @@ func canvas_mouse_exited() -> void:
 func _commit_paint_action() -> void:
 	if paint_tool != PaintTool.LINE and paint_tool != PaintTool.RECT:
 		return
-	if not undo_manager or not tileset:
+	if not _has_history() or not tileset:
 		return
 	var cells := _get_brush_cells()
 
@@ -767,37 +910,37 @@ func _commit_paint_action() -> void:
 	var saved := _save_cells(_expand_cells(cells))
 	var t := _get_selected_terrain()
 	if paint_tool == PaintTool.ERASE or selected_index < 0:
-		undo_manager.create_action("Erase Action", UndoRedo.MERGE_DISABLE, tilemap)
+		_history_create_action("Erase Action", UndoRedo.MERGE_DISABLE, tilemap)
 		for c in cells:
-			undo_manager.add_do_method(tilemap, "erase_cell", c)
-		undo_manager.add_undo_method(self, "_restore_cells", saved, tilemap)
+			_history_add_do_method(tilemap, &"erase_cell", [c])
+		_history_add_undo_method(self, &"_restore_cells", [saved, tilemap])
 	elif not t.is_empty():
-		undo_manager.create_action("Paint Action", UndoRedo.MERGE_DISABLE, tilemap)
-		undo_manager.add_do_method(tilemap, "set_cells_terrain_connect", cells, t.set, t.idx, true)
-		undo_manager.add_undo_method(self, "_restore_cells", saved, tilemap)
-	undo_manager.commit_action()
+		_history_create_action("Paint Action", UndoRedo.MERGE_DISABLE, tilemap)
+		_history_add_do_method(tilemap, &"set_cells_terrain_connect", [cells, t.set, t.idx, true])
+		_history_add_undo_method(self, &"_restore_cells", [saved, tilemap])
+	_history_commit_action()
 
 func _do_paint_stroke() -> void:
 	var cells := _get_stroke_cells()
 	if cells.is_empty():
 		return
-	if not undo_manager:
+	if not _has_history():
 		return
 	var expand := _expand_cells(cells)
 	var saved := _save_cells(expand)
 	var t := _get_selected_terrain()
 	if paint_tool == PaintTool.ERASE or selected_index < 0:
-		undo_manager.create_action("Erase Terrain" + str(drag_action_index), UndoRedo.MERGE_ALL, tilemap, true)
+		_history_create_action("Erase Terrain" + str(drag_action_index), UndoRedo.MERGE_ALL, tilemap, true)
 		for c in cells:
-			undo_manager.add_do_method(tilemap, "erase_cell", c)
-		undo_manager.add_undo_method(self, "_restore_cells", saved, tilemap)
+			_history_add_do_method(tilemap, &"erase_cell", [c])
+		_history_add_undo_method(self, &"_restore_cells", [saved, tilemap])
 	elif not t.is_empty() and t.get("set", -1) >= 0 and t.get("idx", -1) >= 0:
-		undo_manager.create_action("Paint Terrain" + str(drag_action_index), UndoRedo.MERGE_ALL, tilemap, true)
-		undo_manager.add_do_method(tilemap, "set_cells_terrain_connect", cells, t.set, t.idx, true)
-		undo_manager.add_undo_method(self, "_restore_cells", saved, tilemap)
+		_history_create_action("Paint Terrain" + str(drag_action_index), UndoRedo.MERGE_ALL, tilemap, true)
+		_history_add_do_method(tilemap, &"set_cells_terrain_connect", [cells, t.set, t.idx, true])
+		_history_add_undo_method(self, &"_restore_cells", [saved, tilemap])
 	else:
 		return
-	undo_manager.commit_action()
+	_history_commit_action()
 	drag_action_count += 1
 
 func _get_stroke_cells() -> Array[Vector2i]:
@@ -839,22 +982,22 @@ func _do_bucket_fill(erasing: bool) -> void:
 	var cells := _flood_fill(mouse_current)
 	if cells.is_empty():
 		return
-	if not undo_manager:
+	if not _has_history():
 		return
 	var saved := _save_cells(_expand_cells(cells))
 	var t := _get_selected_terrain()
 	if erasing or selected_index < 0:
-		undo_manager.create_action("Erase Fill", UndoRedo.MERGE_DISABLE, tilemap)
+		_history_create_action("Erase Fill", UndoRedo.MERGE_DISABLE, tilemap)
 		for c in cells:
-			undo_manager.add_do_method(tilemap, "erase_cell", c)
-		undo_manager.add_undo_method(self, "_restore_cells", saved, tilemap)
+			_history_add_do_method(tilemap, &"erase_cell", [c])
+		_history_add_undo_method(self, &"_restore_cells", [saved, tilemap])
 	elif not t.is_empty() and t.get("set", -1) >= 0 and t.get("idx", -1) >= 0:
-		undo_manager.create_action("Paint Fill", UndoRedo.MERGE_DISABLE, tilemap)
-		undo_manager.add_do_method(tilemap, "set_cells_terrain_connect", cells, t.set, t.idx, true)
-		undo_manager.add_undo_method(self, "_restore_cells", saved, tilemap)
+		_history_create_action("Paint Fill", UndoRedo.MERGE_DISABLE, tilemap)
+		_history_add_do_method(tilemap, &"set_cells_terrain_connect", [cells, t.set, t.idx, true])
+		_history_add_undo_method(self, &"_restore_cells", [saved, tilemap])
 	else:
 		return
-	undo_manager.commit_action()
+	_history_commit_action()
 
 func _flood_fill(start: Vector2i) -> Array:
 	var target_src := tilemap.get_cell_source_id(start)
@@ -958,8 +1101,15 @@ func canvas_draw(overlay: Control) -> void:
 		overlay.draw_colored_polygon(transform * cell_transform * polygon, color)
 
 func _draw_our_grid(overlay: Control) -> void:
-	var settings := EditorInterface.get_editor_settings()
-	if not settings.get_setting("editors/tiles_editor/display_grid"):
+	var grid_enabled := runtime_grid_enabled
+	var grid_color := runtime_grid_color
+	if not runtime_mode:
+		var settings := _get_editor_settings()
+		if not settings:
+			return
+		grid_enabled = settings.get_setting("editors/tiles_editor/display_grid")
+		grid_color = settings.get_setting("editors/tiles_editor/grid_color")
+	if not grid_enabled:
 		return
 
 	var cell_size := tileset.tile_size
@@ -973,8 +1123,9 @@ func _draw_our_grid(overlay: Control) -> void:
 		return
 
 	# Calculate viewport bounds in tile space
-	var viewport := EditorInterface.get_editor_viewport_2d()
-	var screen_size := viewport.get_visible_rect().size
+	var screen_size := _get_canvas_viewport_size()
+	if screen_size.x <= 0.0 or screen_size.y <= 0.0:
+		return
 	var corners: Array = [
 		inv * Vector2.ZERO,
 		inv * Vector2(screen_size.x, 0),
@@ -1004,9 +1155,6 @@ func _draw_our_grid(overlay: Control) -> void:
 	if displayed_rect.size.y > MAX_SIZE:
 		var excess := (displayed_rect.size.y - MAX_SIZE) / 2
 		displayed_rect = Rect2i(displayed_rect.position.x, displayed_rect.position.y + excess, displayed_rect.size.x, MAX_SIZE)
-
-	# Default native grid color: Color(1.0, 0.5, 0.2, 0.5)
-	var grid_color: Color = settings.get_setting("editors/tiles_editor/grid_color")
 
 	# Square tile shape: draw 4-line outline per cell (matches native renderer)
 	if tileset.tile_shape == TileSet.TILE_SHAPE_SQUARE:
@@ -1078,13 +1226,34 @@ func _get_tile_shape_polygon() -> PackedVector2Array:
 func _canvas_tilemap_transform() -> Transform2D:
 	if not tilemap:
 		return Transform2D.IDENTITY
+	if canvas_transform_provider.is_valid():
+		var provided = canvas_transform_provider.call(tilemap)
+		if provided is Transform2D:
+			return provided
 	var transform := tilemap.get_viewport_transform() * tilemap.global_transform
-	var editor_viewport := EditorInterface.get_editor_viewport_2d()
-	if tilemap.get_viewport() != editor_viewport:
+	var editor_interface := _get_editor_interface()
+	var editor_viewport: Viewport = null
+	if editor_interface:
+		editor_viewport = editor_interface.call("get_editor_viewport_2d") as Viewport
+	if editor_viewport and tilemap.get_viewport() != editor_viewport:
 		var container := tilemap.get_viewport().get_parent() as SubViewportContainer
 		if container:
 			transform = editor_viewport.global_canvas_transform * container.get_transform() * transform
 	return transform
+
+func _get_canvas_viewport_size() -> Vector2:
+	if viewport_size_provider.is_valid():
+		var provided = viewport_size_provider.call()
+		if provided is Vector2:
+			return provided
+	var editor_interface := _get_editor_interface()
+	if editor_interface:
+		var editor_viewport := editor_interface.call("get_editor_viewport_2d") as Viewport
+		if editor_viewport:
+			return editor_viewport.get_visible_rect().size
+	if get_viewport():
+		return get_viewport().get_visible_rect().size
+	return Vector2.ZERO
 
 # ---- LINE ALGORITHMS ----
 
@@ -1161,12 +1330,21 @@ func _tileset_line(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
 # ---- ERASE ALL ----
 
 func _on_erase_all() -> void:
-	if not tilemap or not undo_manager:
+	if not tilemap or not _has_history():
 		return
 	var dialog := ConfirmationDialog.new()
 	dialog.dialog_text = "Erase ALL tiles on layer '%s'?" % tilemap.name
 	dialog.get_ok_button().text = "Erase All"
-	EditorInterface.popup_dialog_centered(dialog)
+	if runtime_mode:
+		add_child(dialog)
+		dialog.popup_centered()
+	else:
+		var editor_interface := _get_editor_interface()
+		if editor_interface:
+			editor_interface.call("popup_dialog_centered", dialog)
+		else:
+			add_child(dialog)
+			dialog.popup_centered()
 	dialog.confirmed.connect(func():
 		_erase_all_tiles()
 		dialog.queue_free()
@@ -1174,15 +1352,15 @@ func _on_erase_all() -> void:
 	dialog.canceled.connect(dialog.queue_free)
 
 func _erase_all_tiles() -> void:
-	if not tilemap or not undo_manager:
+	if not tilemap or not _has_history():
 		return
 	var cells := tilemap.get_used_cells()
 	var saved := _save_cells(cells)
-	undo_manager.create_action("Erase All on " + tilemap.name, UndoRedo.MERGE_DISABLE, tilemap)
+	_history_create_action("Erase All on " + tilemap.name, UndoRedo.MERGE_DISABLE, tilemap)
 	for c in cells:
-		undo_manager.add_do_method(tilemap, "erase_cell", c)
-	undo_manager.add_undo_method(self, "_restore_cells", saved, tilemap)
-	undo_manager.commit_action()
+		_history_add_do_method(tilemap, &"erase_cell", [c])
+	_history_add_undo_method(self, &"_restore_cells", [saved, tilemap])
+	_history_commit_action()
 
 # ---- UTILITY ----
 
@@ -1221,7 +1399,10 @@ func _ensure_editor_select_mode() -> void:
 		btn.pressed.emit()
 
 func _find_canvas_select_mode_button() -> BaseButton:
-	var vp := EditorInterface.get_editor_viewport_2d()
+	var editor_interface := _get_editor_interface()
+	var vp: Viewport = null
+	if editor_interface:
+		vp = editor_interface.call("get_editor_viewport_2d") as Viewport
 	if not vp:
 		return null
 	var node: Node = vp
@@ -1314,11 +1495,11 @@ func _commit_selection() -> void:
 				_selection.erase(c)
 			elif tilemap.get_cell_source_id(c) != -1:
 				_selection[c] = true
-	if undo_manager and not _arrays_equal(old_selection, _selection.keys()):
-		undo_manager.create_action("Change Selection", UndoRedo.MERGE_DISABLE, tilemap)
-		undo_manager.add_undo_method(self, "_set_selection", old_selection)
-		undo_manager.add_do_method(self, "_set_selection", _selection.keys())
-		undo_manager.commit_action()
+	if _has_history() and not _arrays_equal(old_selection, _selection.keys()):
+		_history_create_action("Change Selection", UndoRedo.MERGE_DISABLE, tilemap)
+		_history_add_undo_method(self, &"_set_selection", [old_selection])
+		_history_add_do_method(self, &"_set_selection", [_selection.keys()])
+		_history_commit_action()
 	_drag_type = DragType.NONE
 
 func _start_move(mouse_pos: Vector2i) -> void:
@@ -1339,7 +1520,7 @@ func _restore_move_cells() -> void:
 	_drag_modified.clear()
 
 func _commit_move() -> void:
-	if _drag_modified.is_empty() or not undo_manager:
+	if _drag_modified.is_empty() or not _has_history():
 		_drag_type = DragType.NONE
 		mouse_down = false
 		return
@@ -1358,23 +1539,23 @@ func _commit_move() -> void:
 		if dc.has_cell:
 			new_selection.append(c + offset)
 
-	undo_manager.create_action("Move Tiles", UndoRedo.MERGE_DISABLE, tilemap)
+	_history_create_action("Move Tiles", UndoRedo.MERGE_DISABLE, tilemap)
 
 	# DO: clear old positions, then set new positions, then update selection
 	for c in _drag_modified:
 		var dc: Dictionary = _drag_modified[c]
 		if dc.has_cell:
-			undo_manager.add_do_method(tilemap, "erase_cell", c)
+			_history_add_do_method(tilemap, &"erase_cell", [c])
 	for c in _drag_modified:
 		var dc: Dictionary = _drag_modified[c]
 		if dc.has_cell:
 			var new_cell: Vector2i = c + offset
 			if tileset.has_source(dc.source_id):
-				undo_manager.add_do_method(tilemap, "set_cell", new_cell, dc.source_id, dc.atlas_coords, dc.alternative_tile)
-	undo_manager.add_do_method(self, "_set_selection", new_selection)
+				_history_add_do_method(tilemap, &"set_cell", [new_cell, dc.source_id, dc.atlas_coords, dc.alternative_tile])
+	_history_add_do_method(self, &"_set_selection", [new_selection])
 
 	# UNDO: restore in reverse — selection, then what was at new positions, then clear new, then restore old
-	undo_manager.add_undo_method(self, "_set_selection", old_selection)
+	_history_add_undo_method(self, &"_set_selection", [old_selection])
 	for c in _drag_modified:
 		var new_cell: Vector2i = c + offset
 		var orig_src: int = -1
@@ -1390,17 +1571,17 @@ func _commit_move() -> void:
 			orig_atlas = tilemap.get_cell_atlas_coords(new_cell) if orig_src != -1 else Vector2i.ZERO
 			orig_alt = tilemap.get_cell_alternative_tile(new_cell) if orig_src != -1 else 0
 		if orig_src != -1:
-			undo_manager.add_undo_method(tilemap, "set_cell", new_cell, orig_src, orig_atlas, orig_alt)
+			_history_add_undo_method(tilemap, &"set_cell", [new_cell, orig_src, orig_atlas, orig_alt])
 		else:
-			undo_manager.add_undo_method(tilemap, "erase_cell", new_cell)
+			_history_add_undo_method(tilemap, &"erase_cell", [new_cell])
 	for c in _drag_modified:
 		var du: Dictionary = _drag_modified[c]
 		if du.has_cell:
-			undo_manager.add_undo_method(tilemap, "set_cell", c, du.source_id, du.atlas_coords, du.alternative_tile)
+			_history_add_undo_method(tilemap, &"set_cell", [c, du.source_id, du.atlas_coords, du.alternative_tile])
 		else:
-			undo_manager.add_undo_method(tilemap, "erase_cell", c)
+			_history_add_undo_method(tilemap, &"erase_cell", [c])
 
-	undo_manager.commit_action()
+	_history_commit_action()
 
 	_selection.clear()
 	for c in new_selection:
@@ -1483,18 +1664,18 @@ func _do_cut() -> void:
 	if _selection.is_empty():
 		return
 	_do_copy()
-	if not undo_manager:
+	if not _has_history():
 		return
 	var saved := _save_cells(_selection.keys())
 	var old_selection := _selection.keys()
-	undo_manager.create_action("Cut Tiles", UndoRedo.MERGE_DISABLE, tilemap)
+	_history_create_action("Cut Tiles", UndoRedo.MERGE_DISABLE, tilemap)
 	for c in _selection:
-		undo_manager.add_do_method(tilemap, "erase_cell", c)
-	undo_manager.add_undo_method(self, "_restore_cells", saved, tilemap)
-	undo_manager.add_undo_method(self, "_set_selection", old_selection)
+		_history_add_do_method(tilemap, &"erase_cell", [c])
+	_history_add_undo_method(self, &"_restore_cells", [saved, tilemap])
+	_history_add_undo_method(self, &"_set_selection", [old_selection])
 	_selection.clear()
-	undo_manager.add_do_method(self, "_set_selection", _selection.keys())
-	undo_manager.commit_action()
+	_history_add_do_method(self, &"_set_selection", [_selection.keys()])
+	_history_commit_action()
 	update_overlay.emit()
 
 func _do_paste() -> void:
@@ -1522,7 +1703,7 @@ func _get_paste_origin(pattern: TileMapPattern, mouse_cell: Vector2i) -> Vector2
 	return tilemap.local_to_map(tilemap.map_to_local(mouse_cell) - center_offset)
 
 func _commit_paste() -> void:
-	if not _clipboard or _clipboard.is_empty() or not undo_manager:
+	if not _clipboard or _clipboard.is_empty() or not _has_history():
 		_drag_type = DragType.NONE
 		return
 
@@ -1534,15 +1715,15 @@ func _commit_paste() -> void:
 		var world_cell := pattern_pos + coord
 		saved[world_cell] = _get_cell_state(world_cell)
 
-	undo_manager.create_action("Paste Tiles", UndoRedo.MERGE_DISABLE, tilemap)
+	_history_create_action("Paste Tiles", UndoRedo.MERGE_DISABLE, tilemap)
 	for coord in used_cells:
 		var world_cell := pattern_pos + coord
-		undo_manager.add_do_method(tilemap, "set_cell", world_cell,
+		_history_add_do_method(tilemap, &"set_cell", [world_cell,
 			_clipboard.get_cell_source_id(coord),
 			_clipboard.get_cell_atlas_coords(coord),
-			_clipboard.get_cell_alternative_tile(coord))
-	undo_manager.add_undo_method(self, "_restore_cells", saved, tilemap)
-	undo_manager.commit_action()
+			_clipboard.get_cell_alternative_tile(coord)])
+	_history_add_undo_method(self, &"_restore_cells", [saved, tilemap])
+	_history_commit_action()
 
 	_drag_type = DragType.NONE
 	update_overlay.emit()

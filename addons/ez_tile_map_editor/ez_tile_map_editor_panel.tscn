@@ -1,6 +1,12 @@
 [gd_scene format=3 uid="uid://1bhkbncfojmv"]
 
 [ext_resource type="Script" uid="uid://d4bsm0kh3eusm" path="res://addons/ez_tile_map_editor/ez_tile_map_editor_panel.gd" id="1_panel"]
+[ext_resource type="Script" uid="uid://lpes8eqyfvqg" path="res://addons/ez_tile_map_editor/flyout_button/flyout_button.gd" id="2_3361d"]
+[ext_resource type="Script" uid="uid://dd6qdiv3n7xrg" path="res://addons/ez_tile_map_editor/flyout_button/flyout_button_item.gd" id="3_mhpx5"]
+[ext_resource type="Texture2D" uid="uid://drlbkh01ybr5t" path="res://addons/ez_tile_map_editor/icons/Rectangle.svg" id="4_yw7vp"]
+[ext_resource type="Texture2D" uid="uid://ypqyaiosux1n" path="res://addons/ez_tile_map_editor/icons/RectangleFilled.svg" id="5_mssda"]
+[ext_resource type="Texture2D" uid="uid://dn47fjk6qduep" path="res://addons/ez_tile_map_editor/icons/EllipseFilled.svg" id="6_mj8ra"]
+[ext_resource type="Texture2D" uid="uid://5hjp6yccxqb4" path="res://addons/ez_tile_map_editor/icons/Ellipse.svg" id="7_civ1p"]
 
 [sub_resource type="ButtonGroup" id="draw_group"]
 
@@ -11,16 +17,33 @@ action = &"ez_tile_draw"
 resource_name = "Draw Tool"
 events = [SubResource("action_draw")]
 
-[sub_resource type="DPITexture" id="DPITexture_kny1k"]
+[sub_resource type="DPITexture" id="DPITexture_wo83r"]
 _source = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\"><path fill=\"#ff5d5d\" d=\"M2 1v8.586l1.293-1.293a1 1 0 0 1 1.414 0L7 10.587l2.293-2.293a1 1 0 0 1 1.414 0L13 10.586l1-1V6H9V1H2zm8 0v4h4zm-6 9.414-2 2V15h12v-2.586l-.293.293a1 1 0 0 1-1.414 0L10 10.414l-2.293 2.293a1 1 0 0 1-1.414 0L4 10.414z\"/></svg>
 "
 
-[sub_resource type="InputEventAction" id="action_rect"]
-action = &"ez_tile_rect"
+[sub_resource type="Resource" id="Resource_mj8ra"]
+script = ExtResource("3_mhpx5")
+title = &"Rectangle"
+icon = ExtResource("5_mssda")
+metadata/_custom_type_script = "uid://dd6qdiv3n7xrg"
 
-[sub_resource type="Shortcut" id="shortcut_rect"]
-resource_name = "Rectangle Tool"
-events = [SubResource("action_rect")]
+[sub_resource type="Resource" id="Resource_w8eta"]
+script = ExtResource("3_mhpx5")
+title = &"Outline rectangle"
+icon = ExtResource("4_yw7vp")
+metadata/_custom_type_script = "uid://dd6qdiv3n7xrg"
+
+[sub_resource type="Resource" id="Resource_tjqd2"]
+script = ExtResource("3_mhpx5")
+title = &"Ellipse"
+icon = ExtResource("6_mj8ra")
+metadata/_custom_type_script = "uid://dd6qdiv3n7xrg"
+
+[sub_resource type="Resource" id="Resource_t272n"]
+script = ExtResource("3_mhpx5")
+title = &"Outline ellipse"
+icon = ExtResource("7_civ1p")
+metadata/_custom_type_script = "uid://dd6qdiv3n7xrg"
 
 [sub_resource type="InputEventAction" id="action_line"]
 action = &"ez_tile_line"
@@ -90,20 +113,20 @@ button_pressed = true
 button_group = SubResource("draw_group")
 shortcut = SubResource("shortcut_draw")
 shortcut_in_tooltip = false
-icon = SubResource("DPITexture_kny1k")
+icon = SubResource("DPITexture_wo83r")
 
-[node name="Rect" type="Button" parent="VBoxContainer/Toolbar" unique_id=1024733811]
+[node name="Rect" type="Button" parent="VBoxContainer/Toolbar" unique_id=503994299]
 unique_name_in_owner = true
 layout_mode = 2
-tooltip_text = "Rectangle (R)
-Quick rectangle (Shift)"
 disabled = true
 toggle_mode = true
 button_group = SubResource("draw_group")
-shortcut = SubResource("shortcut_rect")
-shortcut_in_tooltip = false
-icon = SubResource("DPITexture_kny1k")
+icon = ExtResource("5_mssda")
 flat = true
+script = ExtResource("2_3361d")
+popup_direction = 2
+options = Array[ExtResource("3_mhpx5")]([SubResource("Resource_mj8ra"), SubResource("Resource_w8eta"), SubResource("Resource_tjqd2"), SubResource("Resource_t272n")])
+metadata/_custom_type_script = "uid://lpes8eqyfvqg"
 
 [node name="Line" type="Button" parent="VBoxContainer/Toolbar" unique_id=1030726166]
 unique_name_in_owner = true
@@ -115,7 +138,7 @@ toggle_mode = true
 button_group = SubResource("draw_group")
 shortcut = SubResource("shortcut_line")
 shortcut_in_tooltip = false
-icon = SubResource("DPITexture_kny1k")
+icon = SubResource("DPITexture_wo83r")
 flat = true
 
 [node name="Fill" type="Button" parent="VBoxContainer/Toolbar" unique_id=1211768775]
@@ -127,7 +150,7 @@ toggle_mode = true
 button_group = SubResource("draw_group")
 shortcut = SubResource("shortcut_fill")
 shortcut_in_tooltip = false
-icon = SubResource("DPITexture_kny1k")
+icon = SubResource("DPITexture_wo83r")
 flat = true
 
 [node name="VSeparator1" type="VSeparator" parent="VBoxContainer/Toolbar" unique_id=2043930170]
@@ -146,7 +169,7 @@ toggle_mode = true
 button_group = SubResource("draw_group")
 shortcut = SubResource("shortcut_select")
 shortcut_in_tooltip = false
-icon = SubResource("DPITexture_kny1k")
+icon = SubResource("DPITexture_wo83r")
 flat = true
 
 [node name="Pick" type="Button" parent="VBoxContainer/Toolbar" unique_id=1034510133]
@@ -159,7 +182,7 @@ toggle_mode = true
 button_group = SubResource("draw_group")
 shortcut = SubResource("shortcut_pick")
 shortcut_in_tooltip = false
-icon = SubResource("DPITexture_kny1k")
+icon = SubResource("DPITexture_wo83r")
 flat = true
 
 [node name="Erase" type="Button" parent="VBoxContainer/Toolbar" unique_id=343540273]
@@ -171,7 +194,7 @@ toggle_mode = true
 button_group = SubResource("draw_group")
 shortcut = SubResource("shortcut_erase")
 shortcut_in_tooltip = false
-icon = SubResource("DPITexture_kny1k")
+icon = SubResource("DPITexture_wo83r")
 flat = true
 
 [node name="VSeparator2" type="VSeparator" parent="VBoxContainer/Toolbar" unique_id=695127218]
@@ -182,7 +205,7 @@ unique_name_in_owner = true
 self_modulate = Color(1, 0.3, 0.3, 1)
 layout_mode = 2
 tooltip_text = "Erase all tiles on selected tile map layer"
-icon = SubResource("DPITexture_kny1k")
+icon = SubResource("DPITexture_wo83r")
 flat = true
 
 [node name="Spacer" type="Control" parent="VBoxContainer/Toolbar" unique_id=1902240989]
@@ -194,7 +217,7 @@ unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Highlight selected tile map layer"
 toggle_mode = true
-icon = SubResource("DPITexture_kny1k")
+icon = SubResource("DPITexture_wo83r")
 flat = true
 
 [node name="LayerGrid" type="Button" parent="VBoxContainer/Toolbar" unique_id=692744213]
@@ -202,7 +225,7 @@ unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Toggle grid visibility"
 toggle_mode = true
-icon = SubResource("DPITexture_kny1k")
+icon = SubResource("DPITexture_wo83r")
 flat = true
 
 [node name="VSeparator3" type="VSeparator" parent="VBoxContainer/Toolbar" unique_id=2092628571]
