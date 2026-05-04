@@ -1,8 +1,10 @@
-# Tyle Map Editor
+# <img src="icon.png" width="32" alt="Tyle Map Editor Icon"> Tyle Map Editor
 
 > **Y not map faster?**
 
 A Godot 4.6 editor plugin that makes **terrain painting** on `TileMapLayer` nodes intuitive and fast — pick a terrain, choose a tool, and paint directly in the 2D viewport. Replaces the less user-friendly native TileSet bottom panel workflow with a focused, always-visible toolbar and terrain grid.
+
+<img src="logo.png" width="188" alt="Tyle Map Editor Logo">
 
 > **Important:** This plugin works exclusively with **terrains** (terrain sets defined in your TileSet with configured peering bits). It is not a raw tile painter — if you need to place individual tiles, use the native Godot TileMap editor instead.
 
@@ -11,20 +13,23 @@ A Godot 4.6 editor plugin that makes **terrain painting** on `TileMapLayer` node
 ## Features
 
 ### Paint Tools
-| Tool | Shortcut | Description |
-|------|----------|-------------|
-| **Draw** | `D` | Freehand brush with continuous stroke support |
-| **Line** | `L` | Straight lines using Bresenham and tileset-aware algorithms |
-| **Rectangle** | `R` | Fill a rectangular region with the selected terrain |
-| **Bucket Fill** | `B` | Flood fill contiguous areas (BFS-based) |
-| **Pick** | `P` | Sample a terrain from an existing cell to select it |
-| **Erase** | `E` | Remove individual cells from the current layer |
-| **Select** | `S` | Rectangle-select cells; `Shift` to add (discontiguous), `Ctrl` to subtract; click selection to move; cut/copy/paste (Ctrl+X/C/V) |
+
+| Tool            | Shortcut | Description                                                                                                                      |
+| --------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| **Draw**        | `D`      | Freehand brush with continuous stroke support                                                                                    |
+| **Line**        | `L`      | Straight lines using Bresenham and tileset-aware algorithms                                                                      |
+| **Rectangle**   | `R`      | Fill a rectangular region with the selected terrain                                                                              |
+| **Bucket Fill** | `B`      | Flood fill contiguous areas (BFS-based)                                                                                          |
+| **Pick**        | `P`      | Sample a terrain from an existing cell to select it                                                                              |
+| **Erase**       | `E`      | Remove individual cells from the current layer                                                                                   |
+| **Select**      | `S`      | Rectangle-select cells; `Shift` to add (discontiguous), `Ctrl` to subtract; click selection to move; cut/copy/paste (Ctrl+X/C/V) |
 
 All tools support **undo/redo** with per-stroke merging, so a continuous drag is a single undo step.
 
 ### Selection Tool
+
 The Select tool (`S`) supports a full selection workflow:
+
 - **Rectangle-select** — click and drag to select all painted cells in a region
 - **Discontiguous selection** — hold `Shift` while drag-selecting to add more cells to an existing selection, even in non-adjacent regions
 - **Subtraction** — hold `Ctrl` (or `Cmd` on macOS) while drag-selecting to remove cells from the current selection
@@ -33,37 +38,46 @@ The Select tool (`S`) supports a full selection workflow:
 - Selection outline uses cell-aware borders (only outer edges are highlighted)
 
 ### Cut, Copy & Paste
-| Action | Shortcut | Description |
-|--------|----------|-------------|
-| **Copy** | `Ctrl+C` | Copy selected cells to clipboard |
-| **Cut** | `Ctrl+X` | Copy and remove selected cells |
+
+| Action    | Shortcut | Description                                                              |
+| --------- | -------- | ------------------------------------------------------------------------ |
+| **Copy**  | `Ctrl+C` | Copy selected cells to clipboard                                         |
+| **Cut**   | `Ctrl+X` | Copy and remove selected cells                                           |
 | **Paste** | `Ctrl+V` | Enter paste mode with live preview; left-click to place, `Esc` to cancel |
 
 Paste mode shows a translucent preview of the clipboard tiles under the cursor. Click **left** or **right mouse button** to place them.
 
 ### Right-Click Erase
+
 Hold the right mouse button and drag to erase cells while using any paint tool — no need to switch tools mid-edit.
 
 ### Quick Pick
+
 **Ctrl+Click** any painted cell in the viewport to instantly pick that cell's terrain. Picking a terrain from the grid while not in a paint tool auto-switches to the Draw tool.
 
 ### Erase All
+
 Remove every used cell from the current layer in one click, with full undo support.
 
 ### Terrain Grid
+
 A scrollable grid of terrain previews — each shows a tile icon from the atlas, the terrain name, and a selection highlight. Click to select a terrain, then paint. The grid auto-refreshes whenever you modify terrains via the native TileSet bottom panel.
 
 ### Layer Switcher
+
 A dropdown in the toolbar lists all visible `TileMapLayer` nodes in the scene. Switch layers without leaving the viewport or hunting through the scene tree.
 
 ### Layer Highlight & Grid Toggles
+
 - **Layer Highlight** — highlights the selected layer for visual clarity
 - **Grid** — toggles the tile grid overlay
 
 Both settings stay in sync with the native Godot TileMap editor.
 
 ### Canvas Overlay
+
 A real-time preview is drawn over the 2D viewport while editing:
+
 - **Brush preview** — colored polygon under the cursor while painting
 - **Flood fill highlight** — cell outline showing the fill target
 - **Selection outline** — cell-aware border around selected cells
@@ -71,6 +85,7 @@ A real-time preview is drawn over the 2D viewport while editing:
 - **Paste preview** — textured or colored preview of clipboard tiles before placing
 
 ### Custom Grid Rendering
+
 - Viewport culling — only draws grid cells visible on screen
 - Scale fading — grid fades out when cells drop below 5px to avoid visual noise
 - Performance clamping — caps grid drawing at 100×100 cells
@@ -92,13 +107,16 @@ The plugin adds a **Tyle** tab to the bottom panel.
 ## Quick Start
 
 ### Prerequisites
+
 Your `TileSet` must have:
+
 - At least one **terrain set** defined
 - **Peering bits** configured for each tile (so Godot knows which tile to use at terrain boundaries)
 
 > If you're new to Godot terrains, see the official docs: [Using terrains in the TileSet editor](https://docs.godotengine.org/en/stable/tutorials/2d/using_tilemaps.html#creating-terrain-sets)
 
 ### Painting Workflow
+
 1. Open the **TileSet** bottom panel and configure your terrain sets with peering bits
 2. Click the **Tyle** tab in the bottom panel
 3. Select a `TileMapLayer` node in the scene tree (or use the layer dropdown in the toolbar)
@@ -107,6 +125,7 @@ Your `TileSet` must have:
 6. Click and drag in the 2D viewport to paint
 
 ### Example: Grass & Stone Path
+
 1. Create a `TileMapLayer` node and assign a `TileSet` with two terrains: **Grass** and **Stone**
 2. Paint the entire layer with Grass (use `B` for Bucket Fill to fill quickly)
 3. Select the **Stone** terrain from the grid
@@ -131,13 +150,13 @@ Your `TileSet` must have:
 
 ## Troubleshooting
 
-| Issue | Solution |
-|-------|----------|
-| **"No terrain sets defined"** | Open the native **TileSet** bottom panel, select your TileSet, go to the **Terrains** tab, and add at least one terrain to a terrain set. |
-| **Tiles don't appear when painting** | Your tiles are missing peering bits. In the native TileSet panel, select each tile and configure its terrain assignment and peering bits. |
-| **Wrong tile appears at terrain borders** | Ensure all peering bit combinations are covered by tiles in your atlas. Missing combinations fall back to a default tile. |
-| **Can I paint individual tiles?** | No. This plugin only works with terrains. For raw tile placement, use the native Godot TileMap editor. |
-| **Blank/empty terrain icons** | The tile you used to set up the terrain may not have a visible texture. Pick a tile with a clear visual for that terrain. |
+| Issue                                     | Solution                                                                                                                                  |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **"No terrain sets defined"**             | Open the native **TileSet** bottom panel, select your TileSet, go to the **Terrains** tab, and add at least one terrain to a terrain set. |
+| **Tiles don't appear when painting**      | Your tiles are missing peering bits. In the native TileSet panel, select each tile and configure its terrain assignment and peering bits. |
+| **Wrong tile appears at terrain borders** | Ensure all peering bit combinations are covered by tiles in your atlas. Missing combinations fall back to a default tile.                 |
+| **Can I paint individual tiles?**         | No. This plugin only works with terrains. For raw tile placement, use the native Godot TileMap editor.                                    |
+| **Blank/empty terrain icons**             | The tile you used to set up the terrain may not have a visible texture. Pick a tile with a clear visual for that terrain.                 |
 
 ---
 
