@@ -297,3 +297,8 @@ The task still runs Git under the hood, but you can trigger it from VS Code with
 
 - [Flyout Button](https://github.com/Shilo/flyout-button) - vendored as `addons/tyle_map_editor/flyout_button` for compact flyout tool selection.
 - [NeoCade Theme](https://github.com/Shilo/NeoCade-Theme) - vendored as `addons/tyle_map_editor/neocade_theme` for shared editor-facing theme resources.
+
+## 🔁 Used By
+
+- [PentaTile](https://github.com/Shilo/PentaTile) - uses Tyle Map Editor as a child subtree at `addons/penta_tile/tyle_map_editor`.
+- [VirtuMap](https://github.com/Shilo/VirtuMap) - receives Tyle Map Editor recursively through PentaTile at `addons/virtumap/penta_tile/tyle_map_editor`.
