@@ -12,10 +12,6 @@ A Godot 4.6 editor plugin that makes **terrain painting** on `TileMapLayer` node
 
 ## Features
 
-## Dependencies
-
-- [Flyout Button](https://github.com/Shilo/flyout-button) - reusable Godot button control used by the editor toolbar for compact flyout tool selection.
-
 ### Paint Tools
 
 | Tool            | Shortcut | Description                                                                                                                      |
@@ -280,3 +276,7 @@ Optional keyboard shortcut in VS Code `keybindings.json`:
 ```
 
 The task still runs Git under the hood, but you can trigger it from VS Code without retyping the subtree command.
+
+## Dependencies
+
+- [Flyout Button](https://github.com/Shilo/flyout-button) - reusable Godot button control used by the editor toolbar for compact flyout tool selection.
