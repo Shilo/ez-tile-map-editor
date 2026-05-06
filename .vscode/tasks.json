@@ -10,7 +10,7 @@
         "-ExecutionPolicy",
         "Bypass",
         "-Command",
-        "git subtree pull --prefix=addons/flyout_button https://github.com/Shilo/flyout-button.git addon --squash; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; git subtree pull --prefix=addons/neocade_theme https://github.com/Shilo/NeoCade-Theme.git addon --squash; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }"
+        "git subtree pull --prefix=addons/tyle_map_editor/flyout_button https://github.com/Shilo/flyout-button.git addon --squash; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; git subtree pull --prefix=addons/tyle_map_editor/neocade_theme https://github.com/Shilo/NeoCade-Theme.git addon --squash; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }"
       ],
       "problemMatcher": []
     }
