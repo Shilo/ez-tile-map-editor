@@ -4,13 +4,14 @@
     {
       "label": "Update Flyout Button subtree",
       "type": "shell",
-      "command": "powershell",
+      "command": "git",
       "args": [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-Command",
-        "$repo = (Resolve-Path '..\\flyout-button').Path; $split = git -C $repo subtree split --prefix=addons/flyout_button main; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; git -C $repo branch -f flyout-button-addon $split; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; git subtree pull --prefix=addons/flyout_button $repo flyout-button-addon --squash"
+        "subtree",
+        "pull",
+        "--prefix=addons/flyout_button",
+        "https://github.com/Shilo/flyout-button.git",
+        "main",
+        "--squash"
       ],
       "problemMatcher": []
     }
